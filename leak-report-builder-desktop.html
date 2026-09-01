@@ -965,6 +965,7 @@ async function saveAsTemplate(){
 /* ---------------- job fields ---------------- */
 function addJobField(){ state.current.jobFields.push({id:uid(), label:'New Field', value:''}); renderEditor(); }
 function deleteJobField(id){ state.current.jobFields = state.current.jobFields.filter(f=>f.id!==id); renderEditor(); }
+function moveJobField(id,dir){ const a=state.current.jobFields; const i=a.findIndex(f=>f.id===id); const j=i+dir; if(j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; renderEditor(); }
 
 /* ---------------- category / item / photo mutations ---------------- */
 function findCat(catId){ return state.current.categories.find(c=>c.id===catId); }
@@ -2585,6 +2586,7 @@ function renderEditor(){
 
 function addCustomerField(){ state.current.customerFields.push({id:uid(), label:'New Field', role:'', value:''}); renderEditor(); }
 function deleteCustomerField(id){ state.current.customerFields = state.current.customerFields.filter(f=>f.id!==id); renderEditor(); }
+function moveCustomerField(id,dir){ const a=state.current.customerFields; const i=a.findIndex(f=>f.id===id); const j=i+dir; if(j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; renderEditor(); }
 function renderCustomerFields(){
   const wrap = document.getElementById('custFieldsWrap');
   if(!wrap) return;
@@ -2592,6 +2594,8 @@ function renderCustomerFields(){
     <div class="kv-row">
       <textarea class="kv-label" rows="1" data-id="${f.id}" data-part="label" placeholder="Field name">${esc(f.label)}</textarea>
       <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value">${esc(f.value)}</textarea>
+      <button class="item-del" title="Move up" onclick="moveCustomerField('${f.id}',-1)">&uarr;</button>
+      <button class="item-del" title="Move down" onclick="moveCustomerField('${f.id}',1)">&darr;</button>
       <button class="item-del" onclick="deleteCustomerField('${f.id}')">&times;</button>
     </div>`).join('');
   wrap.querySelectorAll('textarea').forEach(inp=>{
@@ -2604,6 +2608,7 @@ function renderCustomerFields(){
 }
 function addSummaryField(){ state.current.summaryFields.push({id:uid(), label:'New Field', value:''}); renderEditor(); }
 function deleteSummaryField(id){ state.current.summaryFields = state.current.summaryFields.filter(f=>f.id!==id); renderEditor(); }
+function moveSummaryField(id,dir){ const a=state.current.summaryFields; const i=a.findIndex(f=>f.id===id); const j=i+dir; if(j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; renderEditor(); }
 function renderSummaryFields(){
   const wrap = document.getElementById('summaryFieldsWrap');
   if(!wrap) return;
@@ -2612,6 +2617,8 @@ function renderSummaryFields(){
       <div style="display:flex;align-items:center;gap:6px;">
         <input class="sum-label" data-id="${f.id}" value="${esc(f.label)}" placeholder="Field name"
                style="flex:1;border:none;background:transparent;font-size:11.5px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.4px;padding:2px;">
+        <button class="item-del" title="Move up" onclick="moveSummaryField('${f.id}',-1)">&uarr;</button>
+        <button class="item-del" title="Move down" onclick="moveSummaryField('${f.id}',1)">&darr;</button>
         <button class="item-del" onclick="deleteSummaryField('${f.id}')">&times;</button>
       </div>
       <textarea class="sum-value" data-id="${f.id}" style="min-height:56px;">${esc(f.value)}</textarea>
@@ -2649,6 +2656,8 @@ function renderJobFields(){
     <div class="kv-row">
       <textarea class="kv-label" rows="1" data-id="${f.id}" data-part="label" placeholder="Field name">${esc(f.label)}</textarea>
       <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value">${esc(f.value)}</textarea>
+      <button class="item-del" title="Move up" onclick="moveJobField('${f.id}',-1)">&uarr;</button>
+      <button class="item-del" title="Move down" onclick="moveJobField('${f.id}',1)">&darr;</button>
       <button class="item-del" onclick="deleteJobField('${f.id}')">&times;</button>
     </div>`).join('');
   wrap.querySelectorAll('textarea').forEach(inp=>{
