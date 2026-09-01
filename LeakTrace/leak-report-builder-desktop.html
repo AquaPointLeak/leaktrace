@@ -1,0 +1,2744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeakTrace — Pool Leak Detection Reports</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --ink:#12313A; --ink-2:#0C232A; --aqua:#1DBFAE; --aqua-soft:#DCF4F0;
+    --paper:#F6F3EC; --paper-2:#FFFFFF; --amber:#DD8933; --text:#1B1F1E;
+    --text-soft:#5B6664; --line:#DAD5C8; --danger:#B84A3E;
+    --pass:#1E8A63; --pass-bg:#E1F3E9; --attn:#B4790F; --attn-bg:#FBEBCF;
+    --fail:#B84A3E; --fail-bg:#F7E4E1; --na:#8A8F8B; --na-bg:#ECEAE3;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  #shell{display:flex; min-height:100vh;}
+  #sidebar{width:320px;flex:none;background:var(--ink);color:#fff;padding:22px 18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  #mainPanel{flex:1;padding:36px 44px 90px;max-width:1180px;}
+  .sidebar-actions{display:flex;flex-direction:column;gap:8px;}
+  .btn-block{width:100%;justify-content:center;}
+  .sidebar-search{width:100%;padding:9px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:13px;}
+  .sidebar-search::placeholder{color:rgba(255,255,255,.45);}
+  .sidebar-list{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;}
+  .sidebar-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:11px 12px;cursor:pointer;transition:background .12s ease;}
+  .sidebar-card:hover{background:rgba(255,255,255,.12);}
+  .sidebar-card.active{background:var(--aqua);border-color:var(--aqua);}
+  .sidebar-card .rc-name{font-weight:600;font-size:13.5px;color:#fff;}
+  .sidebar-card.active .rc-name{color:var(--ink-2);}
+  .sidebar-card .rc-meta{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+  .sidebar-card.active .rc-meta{color:rgba(12,35,42,.75);}
+  .sidebar-card .row-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
+  .sidebar-empty{color:rgba(255,255,255,.55);font-size:12.5px;text-align:center;padding:30px 10px;}
+  .empty-main{max-width:420px;margin:80px auto 0;text-align:center;color:var(--text-soft);}
+  .empty-main .ripple-mark{width:44px;height:44px;margin:0 auto 16px;}
+  .empty-main .ripple-mark span{border-width:2px;}
+  .editor-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .editor-header h1{font-size:24px;margin:0;color:var(--ink);}
+  .items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px;}
+  .job-fields-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 16px;}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .ripple-mark{position:relative;width:22px;height:22px;flex:none;}
+  .ripple-mark span{position:absolute;border-radius:50%;border:1.5px solid var(--aqua);inset:0;}
+  .ripple-mark span:nth-child(2){inset:5px;background:var(--aqua);border:none;}
+  .brand-name{font-weight:600;font-size:18px;letter-spacing:.2px;color:#fff;}
+  .brand-sub{font-size:10px;color:#9FC2C0;font-family:'JetBrains Mono',monospace;letter-spacing:.5px;text-transform:uppercase;}
+
+  .btn{border:none;border-radius:8px;padding:10px 16px;font-family:'Inter',sans-serif;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:transform .08s ease, opacity .15s ease;}
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--aqua);color:var(--ink-2);}
+  .btn-primary:hover{opacity:.9;}
+  .btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);}
+  .btn-ghost:hover{background:rgba(255,255,255,.08);}
+  .btn-outline{background:transparent;color:var(--ink);border:1px solid var(--line);}
+  .btn-outline:hover{background:#EFEBDF;}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(184,74,62,.4);}
+  .btn-danger:hover{background:rgba(184,74,62,.08);}
+  .btn-sm{padding:6px 10px;font-size:12px;border-radius:6px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+
+  .list-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;gap:12px;flex-wrap:wrap;}
+  .list-header h1{font-size:26px;margin:0 0 4px;color:var(--ink);}
+  .list-header p{margin:0;color:var(--text-soft);font-size:13.5px;}
+  input.search{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--paper-2);font-size:14px;margin-bottom:16px;}
+  .report-card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;}
+  .report-card:hover{border-color:var(--aqua);}
+  .rc-name{font-weight:600;font-size:15px;color:var(--ink);}
+  .rc-meta{font-size:12px;color:var(--text-soft);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+  .status-pill{font-size:10.5px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.4px;padding:3px 8px;border-radius:20px;flex:none;}
+  .status-draft{background:#F1E6D2;color:#8A6416;}
+  .status-complete{background:var(--aqua-soft);color:#106E63;}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--text-soft);}
+  .empty-state .ripple-mark{width:40px;height:40px;margin:0 auto 14px;}
+  .empty-state span{border-width:2px;}
+
+  .field-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .field{flex:1;min-width:150px;display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:11.5px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.4px;}
+  .field input,.field select,.field textarea{padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:14px;font-family:'Inter',sans-serif;background:var(--paper-2);width:100%;}
+  textarea{resize:none;overflow:hidden;}
+  .card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  .card h3{margin:0 0 12px;font-size:13px;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;}
+  .card .subnote{font-size:12px;color:var(--text-soft);margin:-8px 0 12px;}
+
+  .letterhead-preview{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+  .logo-box{width:56px;height:56px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--paper);flex:none;}
+  .logo-box img{width:100%;height:100%;object-fit:contain;}
+
+  .kv-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;}
+  .kv-row .kv-label{width:38%;font-size:12.5px;font-weight:600;color:var(--ink);}
+  .kv-row .kv-value{flex:1;font-size:13.5px;}
+  .kv-row input,.kv-row textarea{padding:8px 9px;border-radius:6px;border:1px solid var(--line);font-family:'Inter',sans-serif;background:var(--paper-2);}
+  .kv-row textarea{resize:none;overflow:hidden;min-height:35px;line-height:1.35;}
+  .kv-row .item-del{margin-top:6px;}
+
+  .cat{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;}
+  .cat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .cat-tag{width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--aqua);display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'JetBrains Mono',monospace;flex:none;}
+  .cat-head input.cat-title{flex:1;min-width:140px;border:none;background:transparent;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15.5px;color:var(--ink);padding:4px 2px;}
+  .cat-head input.cat-title:focus{outline:none;border-bottom:1.5px solid var(--aqua);}
+  .cat-body{padding:14px;}
+  .cat-body textarea.cat-intro{width:100%;min-height:44px;border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:12.5px;color:var(--text-soft);margin-bottom:12px;}
+
+  .item-card{border:1px solid var(--line);border-radius:8px;padding:10px 10px 8px;margin-bottom:8px;background:var(--paper);}
+  .item-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+  .item-top input.item-label{flex:1;min-width:120px;border:none;background:transparent;font-weight:600;font-size:13.5px;color:var(--ink);padding:4px 2px;border-bottom:1px solid transparent;}
+  .item-top input.item-label:focus{outline:none;border-bottom:1.5px solid var(--aqua);}
+  textarea.item-note{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:12.5px;margin-bottom:8px;min-height:34px;}
+  select.status-select{border:none;border-radius:20px;font-size:11.5px;font-weight:700;padding:5px 10px;font-family:'JetBrains Mono',monospace;cursor:pointer;flex:none;}
+  select.status-select.st-Pass{background:var(--pass-bg);color:var(--pass);}
+  select.status-select.st-Attention{background:var(--attn-bg);color:var(--attn);}
+  select.status-select.st-Fail{background:var(--fail-bg);color:var(--fail);}
+  select.status-select.st-N\/A{background:var(--na-bg);color:var(--na);}
+  .item-del{background:none;border:none;color:var(--text-soft);cursor:pointer;font-size:15px;padding:2px 4px;flex:none;}
+  .item-del:hover{color:var(--danger);}
+  .media-thumb{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1.28;background:#EFEBDF;}
+  .media-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .media-thumb .no-poster{width:100%;height:100%;background:var(--ink);opacity:.85;}
+  .media-thumb button{position:absolute;top:3px;right:3px;background:var(--danger);color:#fff;border:1.5px solid #fff;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;}
+  .media-thumb.video{cursor:pointer;}
+  .media-thumb .play-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;text-shadow:0 1px 6px rgba(0,0,0,.6);pointer-events:none;}
+  .media-thumb .dur-badge{position:absolute;bottom:3px;left:4px;background:rgba(12,35,42,.8);color:#fff;font-size:9.5px;font-family:'JetBrains Mono',monospace;padding:1px 5px;border-radius:8px;pointer-events:none;}
+  .media-overlay{position:fixed;inset:0;background:rgba(12,35,42,.92);display:flex;align-items:center;justify-content:center;z-index:90;padding:18px;cursor:zoom-out;}
+  .media-overlay video{max-width:100%;max-height:100%;border-radius:8px;background:#000;}
+  .media-close{position:absolute;top:14px;right:16px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+  .media-close:hover{background:rgba(255,255,255,.28);}
+  .item-photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;}
+  .item-photo-thumb{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1.28;background:#EFEBDF;}
+  .item-photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .item-photo-thumb button{position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .item-photo-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .add-photo-label.sm{padding:5px 9px;font-size:11px;}
+
+  .login-wrap{max-width:400px;margin:9vh auto 0;}
+  .login-wrap h1{font-size:24px;margin:0 0 6px;color:var(--ink);}
+  .login-wrap p{margin:0 0 18px;color:var(--text-soft);font-size:14px;line-height:1.5;}
+  .fld-label{display:block;font-size:11.5px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.4px;margin:0 0 5px;}
+  .login-wrap input[type=email],.login-wrap input[type=password],.login-wrap input[type=text]{
+    width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);
+    font-size:16px;font-family:'Inter',sans-serif;background:var(--paper-2);margin-bottom:14px;}
+  .pw-wrap{position:relative;}
+  .pw-wrap input{padding-right:62px !important;}
+  .pw-toggle{position:absolute;top:12px;right:10px;background:none;border:none;cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--text-soft);padding:4px 6px;}
+  .pw-toggle:hover{color:var(--ink);}
+  .fld-hint{font-size:12px;color:var(--text-soft);margin:-9px 0 14px;}
+  .auth-row{display:flex;justify-content:flex-end;margin:-6px 0 14px;}
+  .auth-foot{margin-top:16px;font-size:13.5px;color:var(--text-soft);text-align:center;}
+  .linkish{background:none;border:none;color:var(--aqua);font:inherit;font-size:13px;font-weight:600;
+    text-decoration:underline;cursor:pointer;padding:0;}
+  .linkish:hover{color:var(--ink);}
+
+  .btn-block{width:100%;justify-content:center;}
+  .msg{padding:11px 13px;border-radius:8px;font-size:13.5px;margin-bottom:14px;line-height:1.45;}
+  .msg.ok{background:var(--aqua-soft);color:#106E63;}
+  .msg.err{background:var(--fail-bg);color:var(--fail);}
+  .share-box{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);}
+  .share-box label.row{display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:13.5px;color:var(--ink);font-weight:600;}
+  .share-box input[type=checkbox]{width:18px;height:18px;margin-top:1px;flex:none;accent-color:var(--aqua);}
+  .share-hint{font-size:12px;color:var(--text-soft);margin-top:7px;line-height:1.45;}
+  .share-hint.warn{color:var(--attn);}
+  .shared-flag{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--aqua);letter-spacing:.3px;}
+  .filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .filter-chip{padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--paper-2);cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;font-weight:600;color:var(--text-soft);}
+  .filter-chip:hover{border-color:var(--aqua);}
+  .filter-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .filter-chip .cnt{opacity:.65;font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .rc-no{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--aqua);font-weight:600;}
+  .color-row{display:flex;gap:10px;align-items:center;}
+  .color-row input[type=color]{width:52px;height:38px;padding:2px;border-radius:7px;border:1px solid var(--line);background:var(--paper-2);cursor:pointer;}
+  .color-row input[type=text]{width:120px;font-family:'JetBrains Mono',monospace;}
+  .tpl-sections-label{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px 2px;}
+  .rev-badge{font-size:9.5px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:10px;letter-spacing:.3px;vertical-align:middle;}
+  .rev-badge.ok{background:var(--pass-bg);color:var(--pass);}
+  .rev-badge.wait{background:var(--attn-bg);color:var(--attn);}
+  .rev-badge.no{background:var(--fail-bg);color:var(--fail);}
+  .rev-note{font-size:12.5px;color:var(--attn);background:var(--attn-bg);padding:8px 10px;border-radius:7px;margin-top:9px;line-height:1.45;}
+  .cat-disc{font-size:11.5px;color:var(--text-soft);margin-top:4px;line-height:1.5;white-space:pre-wrap;background:var(--paper);padding:8px;border-radius:6px;}
+  .cat-card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px;}
+  .cat-card .cat-head{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;border:none;padding:0;}
+  .cat-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15.5px;color:var(--ink);}
+  .cat-mine{font-size:9.5px;font-family:'JetBrains Mono',monospace;background:var(--aqua-soft);color:#106E63;padding:2px 6px;border-radius:10px;vertical-align:middle;letter-spacing:.3px;}
+  .cat-meta{font-size:11.5px;color:var(--text-soft);font-family:'JetBrains Mono',monospace;margin-top:3px;}
+  .cat-desc{font-size:13px;color:var(--text);margin-top:9px;line-height:1.45;}
+  .cat-preview{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+  .cat-prev-row{font-size:12.5px;color:var(--text-soft);margin-bottom:5px;}
+  .cat-prev-row b{color:var(--ink);font-weight:600;margin-right:5px;}
+  .cat-sect{margin-top:8px;}
+  .cat-sect-title{font-size:12.5px;font-weight:600;color:var(--ink);}
+  .cat-sect-items{font-size:11.5px;color:var(--text-soft);margin-top:2px;line-height:1.5;}
+  .cat-empty{text-align:center;padding:44px 20px;color:var(--text-soft);font-size:13.5px;}
+  .pub-check{display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink);}
+  .pub-check input{width:18px;height:18px;margin-top:1px;flex:none;accent-color:var(--aqua);}
+  .pub-note{font-size:12px;color:var(--text-soft);line-height:1.5;margin-top:9px;padding:10px;background:var(--paper);border-radius:7px;}
+  .pub-state{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--aqua);letter-spacing:.3px;}
+  .preset-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .preset-tab{padding:7px 12px;border-radius:20px;border:1px solid var(--line);background:var(--paper-2);cursor:pointer;font-size:12.5px;font-family:'Inter',sans-serif;font-weight:600;color:var(--text-soft);}
+  .preset-tab:hover{border-color:var(--aqua);}
+  .preset-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .preset-tab .star{color:var(--amber);}
+  .preset-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
+  .preset-name{flex:1;min-width:160px;padding:9px 11px;border-radius:7px;border:1px solid var(--line);font-size:14px;font-weight:600;font-family:'Space Grotesk',sans-serif;color:var(--ink);background:var(--paper-2);}
+  .preset-default-badge{font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--amber);padding:5px 9px;border-radius:20px;background:#FBEBCF;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(12,35,42,.55);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
+  .modal{background:var(--paper-2);border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;}
+  .modal h3{margin:0 0 4px;font-size:17px;color:var(--ink);}
+  .modal p{margin:0 0 14px;font-size:13px;color:var(--text-soft);}
+  .preset-choice{display:block;width:100%;text-align:left;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--paper);margin-bottom:8px;cursor:pointer;font-family:'Inter',sans-serif;}
+  .preset-choice:hover{border-color:var(--aqua);}
+  .preset-choice b{display:block;font-size:14px;color:var(--ink);margin-bottom:2px;}
+  .preset-choice span{font-size:12px;color:var(--text-soft);}
+  .status-sent{background:#DCE7F5;color:#2A5B94;}
+  .tpl-item-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .tpl-item-row input{flex:1;padding:7px 9px;border-radius:6px;border:1px solid var(--line);font-size:13px;font-family:'Inter',sans-serif;}
+  .add-item-row{display:flex;gap:8px;margin-bottom:4px;}
+  .add-item-row input{flex:1;padding:7px 9px;border-radius:6px;border:1px dashed var(--line);font-size:12.5px;}
+
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:10px 0;}
+  .photo-thumb{position:relative;border-radius:7px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1.39;background:#EFEBDF;}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-thumb button{position:absolute;top:5px;right:5px;background:var(--danger);color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;font-size:16px;font-weight:700;cursor:pointer;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;}
+  .photo-thumb button:active{transform:scale(.92);}
+  .photo-thumb input.caption{position:absolute;bottom:0;left:0;right:0;background:rgba(18,49,58,.7);color:#fff;border:none;font-size:10px;padding:3px 5px;font-family:'Inter',sans-serif;}
+  .add-photo-label{display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--line);border-radius:7px;padding:8px 12px;font-size:12.5px;color:var(--text-soft);cursor:pointer;}
+  .add-photo-label:hover{border-color:var(--aqua);color:var(--ink);}
+  .add-photo-label input{display:none;}
+
+  .cat-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+  .add-cat-bar{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;}
+  .add-cat-bar input{flex:1;min-width:160px;padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:13.5px;}
+
+  .sticky-actions{position:sticky;bottom:0;background:linear-gradient(0deg,var(--paper) 60%,transparent);padding:16px 0 4px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="shell">
+  <aside id="sidebar"></aside>
+  <main id="mainPanel"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- storage helpers ---------------- */
+/* Uses the browser's own built-in storage (localStorage), scoped to whatever web
+   address this file is hosted at. This has nothing to do with Claude — it's a
+   standard browser feature, reliable once this page is hosted on a real domain
+   (e.g. via Netlify or embedded in your website) rather than previewed in-chat. */
+/* ============================================================
+   CONFIG — paste your two Supabase values here.
+   Dashboard -> Project Settings -> API
+   The anon key is public by design; your data is protected by the
+   row-level security policies in supabase-setup.sql.
+   ============================================================ */
+const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
+
+const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
+const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+function currentUserId(){ return (state.session && state.session.user) ? state.session.user.id : null; }
+function reportDateOf(r){
+  const f = (r.jobFields||[]).find(x=>/date performed/i.test(x.label||''));
+  return (f && f.value) || null;
+}
+
+/* Same key-based interface the app already used, now backed by Supabase. */
+async function storeGet(key){
+  if(!sb || !currentUserId()) return null;
+  try{
+    if(key === 'business-profile'){
+      const { data, error } = await sb.from('business_profile').select('data').eq('owner_id', currentUserId()).maybeSingle();
+      if(error) throw error;
+      return data ? data.data : null;
+    }
+    if(key === 'category-presets'){
+      const { data, error } = await sb.from('presets').select('data').eq('owner_id', currentUserId()).maybeSingle();
+      if(error) throw error;
+      return data ? data.data : null;
+    }
+    if(key === 'reports-index'){
+      const { data, error } = await sb.from('reports')
+        .select('id, report_number, client_name, property_address, report_date, status, shared_with_client, updated_at')
+        .eq('owner_id', currentUserId())
+        .order('updated_at', { ascending:false });
+      if(error) throw error;
+      return (data||[]).map(r=>({
+        id: r.id,
+        reportNumber: r.report_number,
+        clientName: r.client_name || 'Untitled report',
+        address: r.property_address || '',
+        date: r.report_date || '',
+        status: r.status || 'Draft',
+        shared: !!r.shared_with_client,
+        updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : 0
+      }));
+    }
+    if(key.indexOf('report:') === 0){
+      const { data, error } = await sb.from('reports').select('data').eq('id', key.slice(7)).maybeSingle();
+      if(error) throw error;
+      return data ? data.data : null;
+    }
+    return null;
+  }catch(e){ console.error('storeGet failed', key, e); return null; }
+}
+
+async function storeSet(key,value){
+  if(!sb) return {ok:false, message:'Not connected to Supabase'};
+  if(!currentUserId()) return {ok:false, message:'Not signed in'};
+  try{
+    if(key === 'business-profile'){
+      const { error } = await sb.from('business_profile')
+        .upsert({ owner_id: currentUserId(), data: value }, { onConflict:'owner_id' });
+      if(error) throw error;
+      return {ok:true};
+    }
+    if(key === 'category-presets'){
+      const { error } = await sb.from('presets')
+        .upsert({ owner_id: currentUserId(), data: value }, { onConflict:'owner_id' });
+      if(error) throw error;
+      return {ok:true};
+    }
+    if(key === 'reports-index') return {ok:true};   // derived from the reports table
+    if(key.indexOf('report:') === 0){
+      const r = value;
+      const email = (reportEmail(r)||'').trim().toLowerCase();
+      const { error } = await sb.from('reports').upsert({
+        id: r.id,
+        owner_id: currentUserId(),
+        report_number: r.reportNumber || null,
+        client_name: reportClientName(r) || null,
+        client_email: email || null,
+        property_address: reportAddress(r) || null,
+        report_date: reportDateOf(r),
+        status: r.status || 'Draft',
+        shared_with_client: !!r.sharedWithClient,
+        data: r
+      }, { onConflict:'id' });
+      if(error) throw error;
+      return {ok:true};
+    }
+    return {ok:true};
+  }catch(e){
+    console.error('storeSet failed', key, e);
+    return {ok:false, message: (e && e.message) ? e.message : String(e)};
+  }
+}
+
+async function storeDelete(key){
+  if(!sb || !currentUserId()) return;
+  try{
+    if(key.indexOf('report:') === 0){
+      const { error } = await sb.from('reports').delete().eq('id', key.slice(7));
+      if(error) throw error;
+    }
+  }catch(e){ console.error('storeDelete failed', key, e); }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function statusPillClass(st){ return st==='Complete' ? 'status-complete' : st==='Sent' ? 'status-sent' : 'status-draft'; }
+const STATUS_FILTERS = ['All','Draft','Sent','Complete'];
+function fmtReportNo(n){ return (typeof n === 'number' && n>0) ? '#'+String(n).padStart(4,'0') : ''; }
+async function nextReportNumber(){
+  try{
+    const { data, error } = await sb.rpc('next_report_number');
+    if(error) throw error;
+    if(typeof data === 'number' && data > 0) return data;
+  }catch(e){ console.error('next_report_number failed', e); }
+  // Fall back to the highest number we already know about.
+  return Math.max(0, ...state.reportsIndex.map(r=>r.reportNumber||0)) + 1;
+}
+function hexToRgb(hex){
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex||'').trim());
+  return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : [0,65,121];
+}
+function headerRgb(){ return hexToRgb(state.business.headerColor || '#004179'); }
+function filteredReports(){
+  const q = state.search.toLowerCase();
+  const f = state.statusFilter || 'All';
+  return state.reportsIndex
+    .filter(r => f==='All' || (r.status||'Draft')===f)
+    .filter(r => !q || (r.clientName||'').toLowerCase().includes(q)
+                    || (r.address||'').toLowerCase().includes(q)
+                    || fmtReportNo(r.reportNumber).toLowerCase().includes(q))
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+}
+function setStatusFilter(f){ state.statusFilter = f; render(); }
+function statusCount(f){
+  return f==='All' ? state.reportsIndex.length
+                   : state.reportsIndex.filter(r=>(r.status||'Draft')===f).length;
+}
+function normalizeReport(r){
+  (r.categories||[]).forEach(cat=>{
+    cat.photos = cat.photos || [];
+    (cat.items||[]).forEach(it=>{ it.photos = it.photos || []; });
+  });
+  if(!r.reportTitle)       r.reportTitle = DEFAULT_REPORT_TITLE;
+  if(!r.customerHeading)   r.customerHeading = DEFAULT_CUSTOMER_HEADING;
+  if(!r.summaryHeading)    r.summaryHeading = DEFAULT_SUMMARY_HEADING;
+  if(!r.disclaimerHeading) r.disclaimerHeading = DEFAULT_DISCLAIMER_HEADING;
+  // Older reports stored these as fixed properties; fold them into the editable list.
+  if(!r.customerFields || !r.customerFields.length){
+    r.customerFields = DEFAULT_CUSTOMER_FIELDS.map(f=>({
+      id: uid(), label: f.label, role: f.role,
+      value: f.role==='name'    ? (r.clientName||'')
+           : f.role==='phone'   ? (r.clientContact||'')
+           : f.role==='address' ? (r.propertyAddress||'')
+           : f.role==='email'   ? (r.clientEmail||'') : ''
+    }));
+  }
+  (r.customerFields||[]).forEach(f=>{ if(!f.id) f.id = uid(); if(typeof f.role !== 'string') f.role=''; });
+  if(!r.summaryFields || !r.summaryFields.length){
+    r.summaryFields = [
+      {id:uid(), label:'Key findings',               value:r.summaryFindings||''},
+      {id:uid(), label:'Suspicions / correlations',  value:r.summarySuspicions||''},
+      {id:uid(), label:'Recommended actions',        value:r.summaryRecommendations||''}
+    ];
+  }
+  (r.summaryFields||[]).forEach(f=>{ if(!f.id) f.id = uid(); });
+  if(typeof r.sharedWithClient !== 'boolean') r.sharedWithClient = false;
+  return r;
+}
+/* Read the role-tagged customer values the rest of the app depends on. */
+function roleValue(r, role){
+  const f = (r && r.customerFields || []).find(x=>x.role===role);
+  return (f && f.value) || '';
+}
+function reportClientName(r){ return roleValue(r,'name'); }
+function reportAddress(r){ return roleValue(r,'address'); }
+function reportEmail(r){ return roleValue(r,'email'); }
+
+/* Storage-independent backup: download/restore a report as a .json file on-device. */
+function downloadJSON(filename, data){
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function downloadReportBackup(silent){
+  if(!state.current) return;
+  const name = ((reportClientName(state.current)||'report').replace(/[^a-z0-9]+/gi,'_'))+'_backup.json';
+  downloadJSON(name, state.current);
+  if(!silent) showToast('Backup downloaded');
+}
+function restoreReportBackup(fileList){
+  const f = fileList[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.id) data.id = uid();
+      if(!data.categories) throw new Error('not a report backup');
+      state.current = normalizeReport(data);
+      state.view = 'editor';
+      render();
+      showToast('Backup loaded — remember to Save');
+    }catch(err){ showToast('Could not read that backup file'); }
+  };
+  reader.readAsText(f);
+}
+
+/* Resize + re-encode an image file so it stores compactly (storage keys are capped at 5MB). */
+function fileToCompressedDataUrl(file, maxDim, quality){
+  maxDim = maxDim || 1400; quality = quality || 0.72;
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, maxDim / Math.max(width, height));
+        const w = Math.max(1, Math.round(width*scale)), h = Math.max(1, Math.round(height*scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+const STATUS_OPTS = ['Pass','Attention','Fail','N/A'];
+const DEFAULT_JOB_FIELDS = ['Date Performed','Report Date','Reason For Call','Pool Type','Pool Size','Tech Name','Price ($)'];
+const DEFAULT_REPORT_TITLE = 'Leak Detection Report';
+const DEFAULT_CUSTOMER_HEADING = 'Customer Information';
+const DEFAULT_SUMMARY_HEADING = 'Summary';
+const DEFAULT_DISCLAIMER_HEADING = 'Disclaimer';
+/* role ties a customer field to the app's built-ins (list titles, search, PDF filename, email to:) */
+const DEFAULT_CUSTOMER_FIELDS = [
+  {label:'Client name',      role:'name'},
+  {label:'Contact phone',    role:'phone'},
+  {label:'Property address', role:'address'},
+  {label:'Email',            role:'email'}
+];
+const CUSTOMER_ROLES = [
+  {value:'',        label:'— none —'},
+  {value:'name',    label:'Client name'},
+  {value:'phone',   label:'Phone'},
+  {value:'address', label:'Address'},
+  {value:'email',   label:'Email'}
+];
+const DEFAULT_SUMMARY_FIELDS = ['Key findings','Suspicions / correlations','Recommended actions'];
+const DEFAULT_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the inspection. It does not certify code compliance or guarantee against future leaks. Replace this placeholder with your own reviewed terms in Business Settings.";
+const DEFAULT_CATEGORY_TEMPLATE = [
+  {title:'Job Site', intro:'', items:[]},
+  {title:'Visual Leak Inspection', intro:'', items:['Equipment area','Back wash','Around water feature','Structural cracks in pool','Bond beam']},
+  {title:'Plumbing Static Test', intro:'Hydrophoned and/or dye tested around the areas below and noted the following.', items:['Returns','Skimmer','Skimmer seam','Skimmer suction','Skimmer ports','Main drain','Light niches and conduits','Cleaner lines','Side suctions','Spa jets','Spa fill']},
+  {title:'Bond Beam', intro:'', items:['Pool','Spa','Autofill','Around all fittings','Autofill EQ line']},
+  {title:'Additional Findings', intro:'', items:['Air noted in suction lines','Leak location marked on site','Estimate to follow']},
+  {title:'Additional Photos', intro:'', items:[]}
+];
+
+/* ---------------- state ---------------- */
+let state = { view:'list', reportsIndex:[], current:null, business:{}, search:'', statusFilter:'All', templates:[], activeTemplateId:null, session:null, authMsg:null, authBusy:false, authMode:'signin', recovering:false, authEmail:'', catalogue:[], catSearch:'', catExpanded:null, catBusy:false, catError:null, isAdmin:false, reviewQueue:[], revFilter:'pending', revBusy:false, revError:null };
+
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+
+function autoGrowTextareas(container){
+  (container||document).querySelectorAll('textarea').forEach(ta=>{
+    if(ta._autoGrowBound) return;
+    const resize = ()=>{ ta.style.height='auto'; ta.style.height=(ta.scrollHeight+2)+'px'; };
+    ta.addEventListener('input', resize);
+    ta._autoGrowBound = true;
+    resize();
+  });
+}
+
+async function loadEverything(){
+  state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
+  if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
+  state.reportsIndex = (await storeGet('reports-index')) || [];
+  await loadTemplates();
+  await checkAdmin();
+  if(!state.business.companyName){
+    // brand new account: nothing on the letterhead yet
+    state.view = 'settings';
+  }
+}
+
+async function init(){
+  if(!CONFIGURED){ renderConfigWarning(); return; }
+  const { data } = await sb.auth.getSession();
+  state.session = data.session;
+
+  sb.auth.onAuthStateChange(async (event, session)=>{
+    // A reset link signs the user in, so hold them on the new-password form
+    // instead of dropping them into the app with a password they can't recall.
+    if(event === 'PASSWORD_RECOVERY'){
+      state.session = session;
+      state.recovering = true;
+      state.authMsg = null;
+      render();
+      return;
+    }
+    const wasIn = !!state.session;
+    state.session = session;
+    if(session && !wasIn && !state.recovering){
+      state.view='list'; state.authMsg=null;
+      await loadEverything();
+      render();
+    }
+    if(!session && wasIn){
+      state.view='list'; state.reportsIndex=[]; state.current=null;
+      render();
+    }
+  });
+
+  // Recovery links can also be read straight off the URL on first load.
+  if((window.location.hash||'').indexOf('type=recovery') >= 0){
+    state.recovering = true;
+  }
+
+  if(state.session && !state.recovering) await loadEverything();
+  render();
+}
+
+/* ---------------- staff auth (email + password) ----------------
+   Passwords suit people signing in every day. Customers keep magic
+   links in the portal — they shouldn't have to manage a password for
+   a one-off report. Passwords are never stored or logged here;
+   Supabase hashes them server-side. */
+
+const MIN_PASSWORD = 8;
+
+function authMode(){ return state.authMode || 'signin'; }
+function setAuthMode(m){
+  state.authMode = m;
+  state.authMsg = null;
+  render();
+}
+
+function friendlyAuthError(msg){
+  const m = (msg||'').toLowerCase();
+  if(m.indexOf('invalid login credentials') >= 0)
+    return "That email and password don't match an account. Check for typos, or reset your password.";
+  if(m.indexOf('already registered') >= 0 || m.indexOf('already been registered') >= 0)
+    return 'There is already an account with that email. Sign in instead.';
+  if(m.indexOf('email not confirmed') >= 0)
+    return 'Confirm your email first — check your inbox for the confirmation link.';
+  if(m.indexOf('password should be') >= 0)
+    return 'That password is too short. Use at least ' + MIN_PASSWORD + ' characters.';
+  if(m.indexOf('rate limit') >= 0 || m.indexOf('too many') >= 0)
+    return 'Too many attempts. Wait a minute and try again.';
+  return msg || 'Something went wrong. Try again.';
+}
+
+function readAuthField(id){
+  const el = document.getElementById(id);
+  return el ? el.value : '';
+}
+/* A failed attempt re-renders the form, which would otherwise wipe everything
+   typed. Hold on to the email so nobody has to retype it after a typo in the
+   password. Passwords are intentionally not preserved. */
+function rememberEmail(v){ state.authEmail = v; }
+function validEmail(e){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e); }
+
+async function signInWithPassword(){
+  const email = readAuthField('authEmail').trim();
+  const password = readAuthField('authPassword');
+  if(!validEmail(email)){
+    state.authMsg = {type:'err', text:'Enter a valid email address.'};
+    return render();
+  }
+  if(!password){
+    state.authMsg = {type:'err', text:'Enter your password.'};
+    return render();
+  }
+  state.authBusy = true; state.authMsg = null; render();
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  state.authBusy = false;
+  if(error){
+    state.authMsg = {type:'err', text: friendlyAuthError(error.message)};
+    render();
+  }
+  // success is handled by onAuthStateChange
+}
+
+async function createAccount(){
+  const email = readAuthField('authEmail').trim();
+  const password = readAuthField('authPassword');
+  const confirm  = readAuthField('authConfirm');
+  if(!validEmail(email)){
+    state.authMsg = {type:'err', text:'Enter a valid email address.'};
+    return render();
+  }
+  if(password.length < MIN_PASSWORD){
+    state.authMsg = {type:'err', text:'Use a password of at least ' + MIN_PASSWORD + ' characters.'};
+    return render();
+  }
+  if(password !== confirm){
+    state.authMsg = {type:'err', text:'The two passwords do not match.'};
+    return render();
+  }
+  state.authBusy = true; state.authMsg = null; render();
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options:{ emailRedirectTo: window.location.href.split('#')[0] }
+  });
+  state.authBusy = false;
+  if(error){
+    state.authMsg = {type:'err', text: friendlyAuthError(error.message)};
+    return render();
+  }
+  if(data && data.session){
+    return;   // signed straight in; onAuthStateChange takes it from here
+  }
+  state.authMode = 'signin';
+  state.authMsg = {type:'ok', text:'Account created. Check your inbox for a confirmation link, then sign in.'};
+  render();
+}
+
+async function sendPasswordReset(){
+  const email = readAuthField('authEmail').trim();
+  if(!validEmail(email)){
+    state.authMsg = {type:'err', text:'Enter the email address on your account.'};
+    return render();
+  }
+  state.authBusy = true; state.authMsg = null; render();
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href.split('#')[0]
+  });
+  state.authBusy = false;
+  state.authMode = 'signin';
+  // Deliberately the same message either way, so this can't be used to
+  // find out which email addresses have accounts.
+  state.authMsg = {type:'ok', text:'If there is an account for ' + email + ', a reset link is on its way.'};
+  render();
+}
+
+async function setNewPassword(){
+  const password = readAuthField('authPassword');
+  const confirm  = readAuthField('authConfirm');
+  if(password.length < MIN_PASSWORD){
+    state.authMsg = {type:'err', text:'Use a password of at least ' + MIN_PASSWORD + ' characters.'};
+    return render();
+  }
+  if(password !== confirm){
+    state.authMsg = {type:'err', text:'The two passwords do not match.'};
+    return render();
+  }
+  state.authBusy = true; state.authMsg = null; render();
+  const { error } = await sb.auth.updateUser({ password });
+  state.authBusy = false;
+  if(error){
+    state.authMsg = {type:'err', text: friendlyAuthError(error.message)};
+    return render();
+  }
+  state.recovering = false;
+  state.authMode = 'signin';
+  state.authMsg = {type:'ok', text:'Password updated.'};
+  if(state.session){ await loadEverything(); }
+  render();
+}
+
+function togglePasswordView(id, btn){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const showing = el.type === 'text';
+  el.type = showing ? 'password' : 'text';
+  btn.textContent = showing ? 'Show' : 'Hide';
+  btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  state.session = null; state.reportsIndex = []; state.current = null;
+  state.view = 'list'; state.authMode = 'signin'; state.recovering = false; state.authEmail = '';
+  render();
+}
+
+function renderConfigWarning(){
+  document.body.innerHTML = `
+    <div style="max-width:560px;margin:12vh auto;padding:24px;font-family:'Inter',sans-serif;">
+      <div style="background:#FBEBCF;color:#8A6416;padding:18px;border-radius:10px;font-size:14px;line-height:1.55;">
+        <b>Not connected yet.</b><br><br>
+        Open this file in a text editor and replace <code>PASTE_YOUR_PROJECT_URL_HERE</code>
+        and <code>PASTE_YOUR_ANON_PUBLIC_KEY_HERE</code> near the top of the
+        <code>&lt;script&gt;</code> block with the values from
+        Supabase → Project Settings → API, then re-upload the file.
+      </div>
+    </div>`;
+}
+
+function renderLogin(){
+  const m = state.authMsg;
+  const mode = state.recovering ? 'reset' : authMode();
+  const app = document.getElementById(MAIN_EL);
+  const busy = state.authBusy;
+
+  const copy = {
+    signin: { h:'Sign in',            p:'Sign in to build and send inspection reports.' },
+    signup: { h:'Create your account', p:'Set up your company on LeakTrace. Takes about a minute.' },
+    forgot: { h:'Reset your password', p:"Enter your email and we'll send you a link to set a new password." },
+    reset:  { h:'Choose a new password', p:'Pick something you have not used elsewhere.' }
+  }[mode];
+
+  const pwField = (id, label, autocomplete) => `
+    <label class="fld-label" for="${id}">${label}</label>
+    <div class="pw-wrap">
+      <input type="password" id="${id}" autocomplete="${autocomplete}"
+             onkeydown="if(event.key==='Enter') submitAuth();">
+      <button type="button" class="pw-toggle" aria-label="Show password"
+              onclick="togglePasswordView('${id}', this)">Show</button>
+    </div>`;
+
+  let fields = '';
+  if(mode === 'signin'){
+    fields = `
+      <label class="fld-label" for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="username"
+             value="${esc(state.authEmail||'')}"
+             oninput="rememberEmail(this.value)"
+             onkeydown="if(event.key==='Enter') submitAuth();">
+      ${pwField('authPassword','Password','current-password')}
+      <div class="auth-row">
+        <button type="button" class="linkish" onclick="setAuthMode('forgot')">Forgot your password?</button>
+      </div>`;
+  } else if(mode === 'signup'){
+    fields = `
+      <label class="fld-label" for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="username"
+             value="${esc(state.authEmail||'')}"
+             oninput="rememberEmail(this.value)"
+             onkeydown="if(event.key==='Enter') submitAuth();">
+      ${pwField('authPassword','Password','new-password')}
+      <div class="fld-hint">At least ${MIN_PASSWORD} characters.</div>
+      ${pwField('authConfirm','Confirm password','new-password')}`;
+  } else if(mode === 'forgot'){
+    fields = `
+      <label class="fld-label" for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="username"
+             value="${esc(state.authEmail||'')}"
+             oninput="rememberEmail(this.value)"
+             onkeydown="if(event.key==='Enter') submitAuth();">`;
+  } else {
+    fields = `
+      ${pwField('authPassword','New password','new-password')}
+      <div class="fld-hint">At least ${MIN_PASSWORD} characters.</div>
+      ${pwField('authConfirm','Confirm new password','new-password')}`;
+  }
+
+  const button = {
+    signin: busy ? 'Signing in…'  : 'Sign in',
+    signup: busy ? 'Creating…'    : 'Create account',
+    forgot: busy ? 'Sending…'     : 'Email me a reset link',
+    reset:  busy ? 'Saving…'      : 'Save new password'
+  }[mode];
+
+  const footer = {
+    signin: `New here? <button type="button" class="linkish" onclick="setAuthMode('signup')">Create an account</button>`,
+    signup: `Already have an account? <button type="button" class="linkish" onclick="setAuthMode('signin')">Sign in</button>`,
+    forgot: `<button type="button" class="linkish" onclick="setAuthMode('signin')">Back to sign in</button>`,
+    reset:  ''
+  }[mode];
+
+  app.innerHTML = `
+    <div class="login-wrap">
+      <h1>${copy.h}</h1>
+      <p>${copy.p}</p>
+      ${m ? `<div class="msg ${m.type}">${esc(m.text)}</div>` : ''}
+      ${fields}
+      <button class="btn btn-primary btn-block" onclick="submitAuth()" ${busy?'disabled':''}>${button}</button>
+      ${footer ? `<div class="auth-foot">${footer}</div>` : ''}
+    </div>`;
+
+  const focusId = (mode === 'reset') ? 'authPassword'
+                : (state.authEmail && mode !== 'forgot') ? 'authPassword'
+                : 'authEmail';
+  const first = document.getElementById(focusId);
+  if(first) first.focus();
+}
+
+function submitAuth(){
+  const mode = state.recovering ? 'reset' : authMode();
+  if(mode === 'signin') return signInWithPassword();
+  if(mode === 'signup') return createAccount();
+  if(mode === 'forgot') return sendPasswordReset();
+  return setNewPassword();
+}
+
+/* ---------------- business settings ---------------- */
+async function saveBusiness(){
+  const result = await storeSet('business-profile', state.business);
+  if(!result.ok){ showToast('Save failed: '+result.message); return; }
+  showToast('Business settings saved');
+  render();
+}
+function removeLogo(){ state.business.logoDataUrl=''; renderSettings(); }
+function handleLogoFile(fileList){
+  const f = fileList[0]; if(!f) return;
+  fileToCompressedDataUrl(f, 400, 0.8).then(dataUrl=>{ state.business.logoDataUrl = dataUrl; renderSettings(); })
+    .catch(()=> showToast('Could not process that image'));
+}
+
+/* ---------------- report persistence ---------------- */
+async function persistIndex(){ await storeSet('reports-index', state.reportsIndex); }
+
+async function saveCurrentReport(silent){
+  if(!state.current) return;
+  state.current.updatedAt = Date.now();
+  const result = await storeSet('report:'+state.current.id, state.current);
+  const summary = { id: state.current.id, reportNumber: state.current.reportNumber, clientName: reportClientName(state.current) || 'Untitled report', address: reportAddress(state.current) || '', date: (state.current.jobFields.find(f=>/date performed/i.test(f.label))||{}).value || '', status: state.current.status || 'Draft', updatedAt: state.current.updatedAt };
+  const i = state.reportsIndex.findIndex(r=>r.id===state.current.id);
+  if(i>=0) state.reportsIndex[i]=summary; else state.reportsIndex.unshift(summary);
+  renderSidebar();
+  if(!result.ok){
+    showToast('Save failed — downloaded a backup instead');
+    downloadReportBackup(true);
+    return;
+  }
+  await persistIndex();
+  if(!silent) showToast('Report saved');
+}
+
+async function deleteReport(id){
+  if(!confirm('Delete this report permanently? This cannot be undone.')) return;
+  try{
+    const full = (state.current && state.current.id === id) ? state.current : await storeGet('report:'+id);
+    if(full) await removeStoredMedia(collectMediaPaths(full));
+  }catch(e){ console.error('media cleanup failed', e); }
+  await storeDelete('report:'+id);
+  state.reportsIndex = state.reportsIndex.filter(r=>r.id!==id);
+  await persistIndex();
+  state.view='list'; state.current=null;
+  render();
+  showToast('Report deleted');
+}
+
+async function openReport(id){
+  const r = await storeGet('report:'+id);
+  if(!r){
+    if(state.current && state.current.id === id){ state.view='editor'; render(); return; }
+    showToast('Could not load report — try Restore Backup if you saved one');
+    return;
+  }
+  state.current = normalizeReport(r); state.view='editor'; render();
+}
+
+async function newReport(templateId){
+  const tpl = (templateId && state.templates.find(t=>t.id===templateId)) || defaultTemplate();
+  const sections = (tpl && tpl.sections && tpl.sections.length) ? tpl.sections : tplNormalize(DEFAULT_CATEGORY_TEMPLATE);
+  const jobLabels  = (tpl && tpl.jobFields && tpl.jobFields.length) ? tpl.jobFields : DEFAULT_JOB_FIELDS;
+  const custLabels = (tpl && tpl.customerFields && tpl.customerFields.length) ? tpl.customerFields : DEFAULT_CUSTOMER_FIELDS;
+  const sumLabels  = (tpl && tpl.summaryFields && tpl.summaryFields.length) ? tpl.summaryFields : DEFAULT_SUMMARY_FIELDS;
+  const reportNumber = await nextReportNumber();
+  state.current = {
+    id: uid(),
+    reportNumber,
+    reportTitle:       (tpl && tpl.reportTitle) ? tpl.reportTitle : DEFAULT_REPORT_TITLE,
+    customerHeading:   (tpl && tpl.customerHeading) ? tpl.customerHeading : DEFAULT_CUSTOMER_HEADING,
+    jobHeading:        (tpl && tpl.jobHeading) ? tpl.jobHeading : 'Job Information',
+    summaryHeading:    (tpl && tpl.summaryHeading) ? tpl.summaryHeading : DEFAULT_SUMMARY_HEADING,
+    disclaimerHeading: (tpl && tpl.disclaimerHeading) ? tpl.disclaimerHeading : DEFAULT_DISCLAIMER_HEADING,
+    customerFields: custLabels.map(f=>({id:uid(), label:f.label, role:f.role||'', value:''})),
+    jobFields: jobLabels.map(l=>({id:uid(), label:l, value:''})),
+    summaryFields: sumLabels.map(l=>({id:uid(), label:l, value:''})),
+    categories: sections.map(c=>({ id:uid(), title:c.title, intro:c.intro||'', photos:[],
+      items:(c.items||[]).map(label=>({id:uid(), label, status:'Pass', note:'', photos:[]})) })),
+    disclaimer: (tpl && typeof tpl.disclaimer === 'string' && tpl.disclaimer) ? tpl.disclaimer : (state.business.disclaimerDefault || DEFAULT_DISCLAIMER),
+    sharedWithClient:false,
+    status:'Draft', createdAt: Date.now(), updatedAt: Date.now()
+  };
+  state.view='editor';
+  render();
+}
+
+async function saveAsTemplate(){
+  const sections = state.current.categories.map(c=>({ title:c.title, intro:c.intro, items:c.items.map(i=>i.label) }));
+  let name;
+  try{ name = prompt('Save these sections as a new preset. Name it:', 'From '+(state.current.clientName||'report')); }
+  catch(e){ name = 'From '+(state.current.clientName||'report'); }
+  if(name === null) return;
+  if(!name || !name.trim()) name = 'Untitled preset';
+  const t = {id:uid(), name:name.trim(), isDefault:false, disclaimer:(state.current.disclaimer||''),
+             jobHeading:(state.current.jobHeading||'Job Information'),
+             jobFields:(state.current.jobFields||[]).map(f=>f.label).filter(l=>l && l.trim()),
+             reportTitle:(state.current.reportTitle||DEFAULT_REPORT_TITLE),
+             customerHeading:(state.current.customerHeading||DEFAULT_CUSTOMER_HEADING),
+             customerFields:(state.current.customerFields||[]).map(f=>({label:f.label, role:f.role||''})).filter(f=>f.label && f.label.trim()),
+             summaryHeading:(state.current.summaryHeading||DEFAULT_SUMMARY_HEADING),
+             summaryFields:(state.current.summaryFields||[]).map(f=>f.label).filter(l=>l && l.trim()),
+             disclaimerHeading:(state.current.disclaimerHeading||DEFAULT_DISCLAIMER_HEADING),
+             sections:tplNormalize(sections)};
+  state.templates.push(t);
+  const result = await persistTemplates();
+  if(!result.ok){ showToast('Could not save preset: '+result.message); return; }
+  showToast('Saved as preset "'+t.name+'"');
+}
+
+/* ---------------- job fields ---------------- */
+function addJobField(){ state.current.jobFields.push({id:uid(), label:'New Field', value:''}); renderEditor(); }
+function deleteJobField(id){ state.current.jobFields = state.current.jobFields.filter(f=>f.id!==id); renderEditor(); }
+
+/* ---------------- category / item / photo mutations ---------------- */
+function findCat(catId){ return state.current.categories.find(c=>c.id===catId); }
+function addCategory(title){ if(!title||!title.trim()) return; state.current.categories.push({id:uid(), title:title.trim(), intro:'', items:[], photos:[]}); renderEditor(); }
+function deleteCategory(catId){
+  if(!confirm('Remove this section and its contents?')) return;
+  const cat = findCat(catId);
+  if(cat) removeStoredMedia(collectMediaPaths({categories:[cat]}));
+  state.current.categories = state.current.categories.filter(c=>c.id!==catId);
+  renderEditor();
+}
+function collectMediaPaths(report){
+  const out = [];
+  (report.categories||[]).forEach(c=>{
+    (c.photos||[]).forEach(p=>{ if(isVideo(p) && p.path) out.push(p.path); });
+    (c.items||[]).forEach(it=>(it.photos||[]).forEach(p=>{ if(isVideo(p) && p.path) out.push(p.path); }));
+  });
+  return out;
+}
+function moveCategory(catId,dir){ const cats=state.current.categories; const i=cats.findIndex(c=>c.id===catId); const j=i+dir; if(j<0||j>=cats.length) return; [cats[i],cats[j]]=[cats[j],cats[i]]; renderEditor(); }
+
+function addItem(catId, label){ if(!label||!label.trim()) return; findCat(catId).items.push({id:uid(), label:label.trim(), status:'Pass', note:'', photos:[]}); renderEditor(); }
+function deleteItem(catId, itemId){ const cat=findCat(catId); cat.items = cat.items.filter(i=>i.id!==itemId); renderEditor(); }
+function findItem(catId, itemId){ return findCat(catId).items.find(i=>i.id===itemId); }
+
+async function handleItemPhotoFiles(catId, itemId, fileList){
+  const item = findItem(catId, itemId);
+  const files = Array.from(fileList);
+  if(!files.length) return;
+  if(files.length>1) showToast('Processing '+files.length+' photos...');
+  for(const file of files){
+    try{
+      const dataUrl = await fileToCompressedDataUrl(file);
+      item.photos.push({id:uid(), dataUrl, caption:''});
+    }catch(e){ showToast('Could not add '+(file.name||'a photo')); }
+  }
+  renderEditor();
+}
+function deleteItemPhoto(catId, itemId, photoId){
+  const item = findItem(catId, itemId);
+  const m = item.photos.find(p=>p.id===photoId);
+  if(!confirm(isVideo(m) ? 'Remove this video?' : 'Remove this photo?')) return;
+  if(isVideo(m) && m.path) removeStoredMedia([m.path]);
+  item.photos = item.photos.filter(p=>p.id!==photoId);
+  renderEditor();
+}
+
+async function handlePhotoFiles(catId, fileList){
+  const cat = findCat(catId);
+  const files = Array.from(fileList);
+  if(!files.length) return;
+  if(files.length>1) showToast('Processing '+files.length+' photos...');
+  for(const file of files){
+    try{
+      const dataUrl = await fileToCompressedDataUrl(file);
+      cat.photos.push({id:uid(), dataUrl, caption:''});
+    }catch(e){ showToast('Could not add '+(file.name||'a photo')); }
+  }
+  renderEditor();
+}
+function deletePhoto(catId, photoId){
+  const cat = findCat(catId);
+  const m = cat.photos.find(p=>p.id===photoId);
+  if(!confirm(isVideo(m) ? 'Remove this video?' : 'Remove this photo?')) return;
+  if(isVideo(m) && m.path) removeStoredMedia([m.path]);
+  cat.photos = cat.photos.filter(p=>p.id!==photoId);
+  renderEditor();
+}
+
+
+/* ---------------- video attachments ----------------
+   Videos are 50-100x the size of a photo, so they go to Supabase
+   Storage rather than into the report record. We keep only a path,
+   plus a poster frame grabbed client-side for thumbnails and the PDF. */
+const MEDIA_BUCKET      = 'report-media';
+const MAX_VIDEO_BYTES   = 60 * 1024 * 1024;   // matches the bucket ceiling
+const MAX_VIDEO_SECONDS = 90;
+
+function isVideo(m){ return m && m.type === 'video'; }
+function mediaExt(file){
+  const m = /\.([a-z0-9]+)$/i.exec(file.name||'');
+  if(m) return m[1].toLowerCase();
+  if((file.type||'').indexOf('quicktime') >= 0) return 'mov';
+  if((file.type||'').indexOf('webm') >= 0) return 'webm';
+  return 'mp4';
+}
+
+/* Grab a frame ~0.4s in, for the grid thumbnail and the PDF. */
+function extractPosterFrame(file, maxDim){
+  maxDim = maxDim || 900;
+  return new Promise((resolve, reject)=>{
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.muted = true;
+    v.playsInline = true;
+    let done = false;
+    const finish = (val, err) => {
+      if(done) return;
+      done = true;
+      URL.revokeObjectURL(url);
+      err ? reject(err) : resolve(val);
+    };
+    v.onerror = () => finish(null, new Error('Could not read that video'));
+    v.onloadedmetadata = () => {
+      if(v.duration && v.duration > MAX_VIDEO_SECONDS){
+        return finish(null, new Error('TOO_LONG:'+Math.round(v.duration)));
+      }
+      const t = Math.min(0.4, (v.duration || 1) / 2);
+      const grab = () => {
+        try{
+          const scale = Math.min(1, maxDim / Math.max(v.videoWidth || maxDim, v.videoHeight || maxDim));
+          const c = document.createElement('canvas');
+          c.width  = Math.max(1, Math.round((v.videoWidth  || 640) * scale));
+          c.height = Math.max(1, Math.round((v.videoHeight || 480) * scale));
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          finish({ poster: c.toDataURL('image/jpeg', 0.7), duration: v.duration || 0 });
+        }catch(e){ finish({ poster:'', duration: v.duration || 0 }); }
+      };
+      v.onseeked = grab;
+      try{ v.currentTime = t; }catch(e){ grab(); }
+    };
+    v.src = url;
+  });
+}
+
+async function uploadVideo(file, reportId){
+  if(!sb || !currentUserId()) throw new Error('Not signed in');
+  const id = uid();
+  const path = currentUserId() + '/' + reportId + '/' + id + '.' + mediaExt(file);
+  const { error } = await sb.storage.from(MEDIA_BUCKET).upload(path, file, {
+    contentType: file.type || 'video/mp4',
+    upsert: false
+  });
+  if(error) throw error;
+  return { id, path };
+}
+
+async function removeStoredMedia(paths){
+  if(!sb || !paths || !paths.length) return;
+  try{ await sb.storage.from(MEDIA_BUCKET).remove(paths); }
+  catch(e){ console.error('media remove failed', e); }
+}
+
+/* Signed links are short-lived, so we mint them on demand. */
+async function signedMediaUrl(path){
+  if(!sb) return null;
+  try{
+    const { data, error } = await sb.storage.from(MEDIA_BUCKET).createSignedUrl(path, 3600);
+    if(error) throw error;
+    return data.signedUrl;
+  }catch(e){ console.error('signed url failed', e); return null; }
+}
+
+async function ingestVideos(fileList, targetArray){
+  const files = Array.from(fileList).filter(f=>f && f.size);
+  if(!files.length) return;
+  if(!state.current) return;
+  for(const file of files){
+    if(file.size > MAX_VIDEO_BYTES){
+      showToast(`"${file.name||'That video'}" is ${(file.size/1048576).toFixed(0)}MB — the limit is ${MAX_VIDEO_BYTES/1048576}MB. Trim it and try again.`);
+      continue;
+    }
+    let meta = { poster:'', duration:0 };
+    try{
+      meta = await extractPosterFrame(file);
+    }catch(e){
+      const msg = String(e && e.message || e);
+      if(msg.indexOf('TOO_LONG:') === 0){
+        showToast(`That clip is ${msg.split(':')[1]}s — please keep videos under ${MAX_VIDEO_SECONDS}s.`);
+        continue;   // we know the duration, so this one is a hard no
+      }
+      // Couldn't decode a preview frame (unusual codec, e.g. some HEVC clips).
+      // Still upload it — the clip may well play fine elsewhere — just without a thumbnail.
+      showToast('Added without a preview image — this browser could not read a frame from it.');
+    }
+    showToast('Uploading video…');
+    try{
+      const up = await uploadVideo(file, state.current.id);
+      targetArray.push({
+        id: up.id, type:'video', path: up.path,
+        poster: meta.poster || '', duration: Math.round(meta.duration||0), caption:''
+      });
+      showToast('Video added');
+    }catch(e){
+      showToast('Upload failed: ' + (e.message || 'unknown error'));
+    }
+  }
+  renderEditor();
+}
+
+async function handleItemVideoFiles(catId, itemId, fileList){
+  const item = findItem(catId, itemId);
+  if(item) await ingestVideos(fileList, item.photos);
+}
+async function handleCatVideoFiles(catId, fileList){
+  const cat = findCat(catId);
+  if(cat) await ingestVideos(fileList, cat.photos);
+}
+
+/* Play a stored clip in an overlay. */
+async function playMedia(path){
+  const url = await signedMediaUrl(path);
+  if(!url){ showToast('Could not load that video'); return; }
+  const box = document.createElement('div');
+  box.className = 'media-overlay';
+  box.innerHTML = `<button class="media-close" aria-label="Close">&times;</button>
+                   <video src="${url}" controls autoplay playsinline></video>`;
+  box.onclick = e => { if(e.target === box) box.remove(); };
+  box.querySelector('.media-close').onclick = () => box.remove();
+  const esc = e => { if(e.key === 'Escape'){ box.remove(); document.removeEventListener('keydown', esc); } };
+  document.addEventListener('keydown', esc);
+  document.body.appendChild(box);
+}
+
+function mediaThumb(m, onDelete){
+  if(isVideo(m)){
+    const secs = m.duration ? (m.duration >= 60 ? Math.floor(m.duration/60)+'m'+String(m.duration%60).padStart(2,'0') : m.duration+'s') : '';
+    return `<div class="media-thumb video" onclick="playMedia('${m.path}')">
+        ${m.poster ? `<img src="${m.poster}" alt="">` : '<div class="no-poster"></div>'}
+        <span class="play-badge">&#9654;</span>
+        ${secs ? `<span class="dur-badge">${secs}</span>` : ''}
+        <button onclick="event.stopPropagation(); ${onDelete}">&times;</button>
+      </div>`;
+  }
+  return `<div class="media-thumb"><img src="${m.dataUrl}" alt=""><button onclick="${onDelete}">&times;</button></div>`;
+}
+
+/* ---------------- PDF export ---------------- */
+function loadImageSize(dataUrl){ return new Promise(resolve=>{ const img=new Image(); img.onload=()=>resolve({w:img.naturalWidth,h:img.naturalHeight}); img.onerror=()=>resolve({w:400,h:300}); img.src=dataUrl; }); }
+const STATUS_RGB = { Pass:[30,138,99], Attention:[180,121,15], Fail:[184,74,62], 'N/A':[138,143,139] };
+
+function drawStatusBadge(doc, status, x, y){
+  const rgb = STATUS_RGB[status] || STATUS_RGB['N/A'];
+  const label = status || 'N/A';
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  const textW = doc.getTextWidth(label);
+  const padX = 5, badgeH = 12, badgeW = textW + padX*2;
+  doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+  doc.roundedRect(x, y-9, badgeW, badgeH, 3, 3, 'F');
+  doc.setTextColor(255,255,255);
+  doc.text(label, x+padX, y);
+  return badgeW;
+}
+
+/* Crops an image (center-crop, cover-fit) to exactly match the target box's aspect ratio,
+   returning a new dataURL sized to that ratio. Doing the crop in canvas (rather than relying
+   on PDF clipping, which isn't reliably supported) guarantees the placed image can never
+   overflow its box. */
+function cropImageToBox(dataUrl, boxW, boxH){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = () => {
+      const targetRatio = boxW / boxH;
+      const srcRatio = img.naturalWidth / img.naturalHeight;
+      let sx, sy, sw, sh;
+      if(srcRatio > targetRatio){
+        sh = img.naturalHeight; sw = sh * targetRatio; sy = 0; sx = (img.naturalWidth - sw) / 2;
+      } else {
+        sw = img.naturalWidth; sh = sw / targetRatio; sx = 0; sy = (img.naturalHeight - sh) / 2;
+      }
+      const outW = Math.round(boxW * 2), outH = Math.round(boxH * 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = outW; canvas.height = outH;
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+/* Draws an image cropped (cover-fit) to exactly fill the box, no border, guaranteed no overflow. */
+async function drawCoverImage(doc, dataUrl, x, y, boxW, boxH){
+  try{
+    const cropped = await cropImageToBox(dataUrl, boxW, boxH);
+    doc.addImage(cropped, undefined, x, y, boxW, boxH);
+  }catch(e){}
+}
+
+/* A PDF can't play video, so print the poster frame with a marker. */
+async function drawMedia(doc, m, x, y, boxW, boxH){
+  if(isVideo(m)){
+    if(m.poster){
+      await drawCoverImage(doc, m.poster, x, y, boxW, boxH);
+    } else {
+      doc.setFillColor(18,49,58); doc.rect(x, y, boxW, boxH, 'F');
+    }
+    const bw = 46, bh = 12;
+    doc.setFillColor(12,35,42);
+    doc.roundedRect(x+3, y+boxH-bh-3, bw, bh, 3, 3, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7);
+    doc.setTextColor(255,255,255);
+    doc.text('> VIDEO', x+8, y+boxH-6);
+  } else {
+    await drawCoverImage(doc, m.dataUrl, x, y, boxW, boxH);
+  }
+}
+
+/* Claude's in-chat artifact preview runs inside a restricted iframe where the normal
+   anchor-download trick jsPDF uses for doc.save() can fail silently or save garbled
+   raw data instead of a real PDF. Detect that case and open the PDF in a new tab
+   instead, which works reliably there. Outside that context (hosted site, downloaded
+   file), a normal download still works fine. */
+function inRestrictedFrame(){
+  try{ return window.self !== window.top; }catch(e){ return true; }
+}
+function savePDF(doc, filename){
+  if(inRestrictedFrame()){
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    showToast('PDF opened in a new tab — use its Share/Download button to save it');
+  } else {
+    doc.save(filename);
+    showToast('PDF exported');
+  }
+}
+
+async function buildPDF(){
+  await saveCurrentReport(true);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt',format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+  const margin = 44, contentW = pageW - margin*2;
+  let y = margin;
+  const biz = state.business, r = state.current;
+
+  function ensureSpace(h){ if(y+h > pageH-margin){ doc.addPage(); y = margin; } }
+
+  // Letterhead: the business-info block is a solid band in the chosen colour.
+  const hc = headerRgb();
+  const bandH = 78;
+  doc.setFillColor(hc[0],hc[1],hc[2]);
+  doc.rect(0, 0, pageW, bandH, 'F');
+
+  // Pick readable text for whatever colour was chosen.
+  const lum = (0.299*hc[0] + 0.587*hc[1] + 0.114*hc[2]) / 255;
+  const fg = lum < 0.6 ? [255,255,255] : [24,28,27];
+  const fgSoft = lum < 0.6 ? [222,234,232] : [70,80,78];
+
+  const logoH = 40;
+  let textX = margin;
+  if(biz.logoDataUrl){
+    try{
+      const sz = await loadImageSize(biz.logoDataUrl);
+      const w = logoH * (sz.w/sz.h);
+      doc.addImage(biz.logoDataUrl, undefined, margin, (bandH-logoH)/2, w, logoH);
+      textX = margin + w + 14;
+    }catch(e){ textX = margin; }
+  }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(fg[0],fg[1],fg[2]);
+  doc.text(biz.companyName || 'Pool Leak Detection Report', textX, bandH/2 - 2);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(fgSoft[0],fgSoft[1],fgSoft[2]);
+  doc.text([biz.companyPhone, biz.companyEmail].filter(Boolean).join('   |   '), textX, bandH/2 + 13);
+  const rno = fmtReportNo(r.reportNumber);
+  if(rno){
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(fg[0],fg[1],fg[2]);
+    doc.text(rno, pageW-margin, bandH/2 - 2, {align:'right'});
+  }
+
+  y = bandH + 26;
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(18,49,58);
+  doc.text(r.reportTitle || DEFAULT_REPORT_TITLE, margin, y); y += 18;
+
+  // Customer info
+  if(r.customerHeading && r.customerHeading.trim()){
+    ensureSpace(14);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58);
+    doc.text(r.customerHeading.toUpperCase(), margin, y); y += 12;
+  }
+  doc.setFontSize(8.5); doc.setTextColor(27,31,30);
+  const custPairs = (r.customerFields||[]).map(f=>[f.label||'', f.value||'']);
+  custPairs.forEach(([label,val])=>{
+    const vLines = doc.splitTextToSize(String(val||'-'), contentW-95);
+    ensureSpace(Math.max(12, vLines.length*11));
+    doc.setFont('helvetica','bold'); doc.text(label.toUpperCase()+':', margin, y);
+    doc.setFont('helvetica','normal');
+    vLines.forEach((ln,i)=> doc.text(ln, margin+95, y + i*11));
+    y += Math.max(12, vLines.length*11);
+  });
+  y += 4;
+
+  // Job fields (2-col)
+  ensureSpace(12);
+  if(r.jobHeading && r.jobHeading.trim()){
+    ensureSpace(14);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58);
+    doc.text(r.jobHeading.toUpperCase(), margin, y); y += 12;
+    doc.setTextColor(27,31,30);
+  }
+  doc.setFontSize(7.5);
+  const colW = contentW/2, valOffset = 85, valW = colW - valOffset - 6;
+  for(let i=0; i<r.jobFields.length; i+=2){
+    const pair = [r.jobFields[i], r.jobFields[i+1]];
+    const wrapped = pair.map(f => f ? doc.splitTextToSize(String(f.value||'-'), valW) : null);
+    const rowH = Math.max(...wrapped.map(w => w ? w.length : 1)) * 10 + 2;
+    ensureSpace(rowH);
+    pair.forEach((f, c) => {
+      if(!f) return;
+      const x = margin + c*colW;
+      doc.setFont('helvetica','bold'); doc.text((f.label||'').toUpperCase()+':', x, y);
+      doc.setFont('helvetica','normal');
+      wrapped[c].forEach((ln, li) => doc.text(ln, x+valOffset, y + li*10));
+    });
+    y += rowH;
+  }
+  y += 10;
+
+  // Summary
+  const summaryBlocks = (r.summaryFields||[]).map(f=>[f.label||'', f.value||'']);
+  const hasSummary = summaryBlocks.some(b=>b[1] && b[1].trim());
+  if(hasSummary){
+    ensureSpace(20);
+    doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=18;
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0,65,121); doc.text(r.summaryHeading || DEFAULT_SUMMARY_HEADING, margin, y); y+=16;
+    summaryBlocks.forEach(([label,val])=>{
+      if(!val || !val.trim()) return;
+      ensureSpace(14);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,65,121);
+      doc.text(label, margin, y); y+=13;
+      doc.setFont('helvetica','normal'); doc.setTextColor(27,31,30); doc.setFontSize(9.5);
+      const lines = doc.splitTextToSize(val, contentW);
+      lines.forEach(line=>{ ensureSpace(12); doc.text(line, margin, y); y+=12; });
+      y+=6;
+    });
+  }
+
+  // Categories
+  for(let ci=0; ci<r.categories.length; ci++){
+    const cat = r.categories[ci];
+    ensureSpace(28);
+    doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=18;
+    doc.setFont('helvetica','bold'); doc.setFontSize(12.5); doc.setTextColor(18,49,58);
+    doc.text((ci+1)+'.  '+(cat.title||'Untitled section'), margin, y); y+=15;
+
+    if(cat.intro && cat.intro.trim()){
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(90,100,98);
+      const lines = doc.splitTextToSize(cat.intro, contentW);
+      lines.forEach(line=>{ ensureSpace(11); doc.text(line, margin, y); y+=11; });
+      y+=6;
+    }
+
+    if(cat.items && cat.items.length){
+      for(const item of cat.items){
+        ensureSpace(15);
+        doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(27,31,30);
+        doc.text(item.label||'', margin, y);
+        const skipBadge = item.status === 'N/A' || /additional findings/i.test(cat.title||'');
+        if(item.status && !skipBadge) drawStatusBadge(doc, item.status, margin+250, y);
+        if(item.note && item.note.trim()){
+          doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,100,98);
+          const noteLines = doc.splitTextToSize(item.note, contentW-320);
+          doc.text(noteLines[0]||'', margin+320, y);
+        }
+        y += 15;
+
+        if(item.photos && item.photos.length){
+          const cols=4, gap=6, boxW=(contentW-gap*(cols-1))/cols, boxH=boxW*0.78;
+          for(let pi=0; pi<item.photos.length; pi+=cols){
+            ensureSpace(boxH+12);
+            for(let c=0;c<cols;c++){
+              const photo = item.photos[pi+c]; if(!photo) continue;
+              const x = margin + c*(boxW+gap);
+              await drawMedia(doc, photo, x, y, boxW, boxH);
+            }
+            y += boxH+12;
+          }
+        }
+      }
+      y += 4;
+    }
+
+    if(cat.photos && cat.photos.length){
+      const cols=3, gap=8, boxW=(contentW-gap*(cols-1))/cols, boxH=boxW*0.72;
+      for(let pi=0; pi<cat.photos.length; pi+=cols){
+        ensureSpace(boxH+22);
+        for(let c=0;c<cols;c++){
+          const photo = cat.photos[pi+c]; if(!photo) continue;
+          const x = margin + c*(boxW+gap);
+          await drawMedia(doc, photo, x, y, boxW, boxH);
+          if(photo.caption){ doc.setFontSize(8); doc.setTextColor(90,100,98); doc.text(photo.caption, x, y+boxH+10, {maxWidth:boxW}); }
+        }
+        y += boxH+22;
+      }
+    }
+    y += 6;
+  }
+
+  // Disclaimer
+  if(r.disclaimer && r.disclaimer.trim()){
+    ensureSpace(30);
+    doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=16;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58); doc.text((r.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING).toUpperCase(), margin, y); y+=11;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110,115,112);
+    const lines = doc.splitTextToSize(r.disclaimer, contentW);
+    lines.forEach(line=>{ ensureSpace(9); doc.text(line, margin, y); y+=9; });
+  }
+
+  // Footer on last page
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(140,145,142);
+  doc.text('© '+new Date().getFullYear()+' '+(biz.companyName||'')+'   ·   Report generated '+new Date().toLocaleDateString(), margin, pageH-24);
+
+  const filename = ((reportClientName(r)||'report').replace(/[^a-z0-9]+/gi,'_'))+'_leak_report.pdf';
+  return { doc, filename, r };
+}
+
+async function exportPDF(){
+  try{
+    const { doc, filename } = await buildPDF();
+    savePDF(doc, filename);
+  }catch(err){
+    console.error('PDF export failed', err);
+    showToast('PDF export failed — try removing a very large photo and export again');
+  }
+}
+
+async function emailPDF(){
+  try{
+    const { doc, filename, r } = await buildPDF();
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, {type:'application/pdf'});
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({
+          files:[file],
+          title: 'Your Pool Leak Detection Report',
+          text: 'Hi '+(reportClientName(r)||'there')+'! Your leak report is attached. If you have any questions or concerns, please reach out to '+(state.business.companyPhone||'us')+'. Thank you!'
+        });
+      }catch(shareErr){
+        if(!shareErr || shareErr.name !== 'AbortError'){
+          savePDF(doc, filename);
+          showToast('Could not open share sheet — opened the PDF instead');
+        }
+      }
+    } else {
+      savePDF(doc, filename);
+      const to = encodeURIComponent(reportEmail(r) || '');
+      const subject = encodeURIComponent('Your Leak Detection Report is Ready');
+      const body = encodeURIComponent('Hi '+(reportClientName(r)||'')+'!\n\nYour leak report is ready — please see the attached PDF (attach the file from the previous step).\n\nIf you have any questions or concerns, please reach out to '+(state.business.companyPhone||'')+'.\n\nThank you!');
+      showToast('Opening email — attach the PDF from the previous step');
+      setTimeout(()=>{ window.location.href = 'mailto:'+to+'?subject='+subject+'&body='+body; }, 500);
+    }
+  }catch(err){
+    console.error('Email PDF failed', err);
+    showToast('Could not prepare the PDF — try again');
+  }
+}
+
+
+
+/* ---------------- preset library (multiple named presets) ---------------- */
+function tplNormalize(sections){
+  return (sections||[]).map(c=>({
+    id: c.id || uid(),
+    title: c.title || '',
+    intro: c.intro || '',
+    items: (c.items||[]).map(i => typeof i === 'string' ? i : ((i && i.label) || ''))
+  }));
+}
+async function loadTemplates(){
+  let saved = await storeGet('category-presets');
+  if(!saved || !saved.length){
+    // migrate from the older single-template format, if present
+    const legacy = await storeGet('category-template');
+    saved = [{
+      id: uid(),
+      name: (legacy && legacy.length) ? 'My Preset' : 'Standard Leak Detection',
+      isDefault: true,
+      disclaimer: state.business.disclaimerDefault || DEFAULT_DISCLAIMER,
+      jobHeading: 'Job Information',
+      jobFields: DEFAULT_JOB_FIELDS.slice(),
+      sections: (legacy && legacy.length) ? legacy : DEFAULT_CATEGORY_TEMPLATE
+    }];
+  }
+  state.templates = saved.map(t=>({
+    id: t.id || uid(),
+    name: t.name || 'Untitled preset',
+    isDefault: !!t.isDefault,
+    disclaimer: (typeof t.disclaimer === 'string') ? t.disclaimer : (state.business.disclaimerDefault || DEFAULT_DISCLAIMER),
+    jobHeading: (typeof t.jobHeading === 'string' && t.jobHeading) ? t.jobHeading : 'Job Information',
+    jobFields: (t.jobFields && t.jobFields.length) ? t.jobFields.slice() : DEFAULT_JOB_FIELDS.slice(),
+    reportTitle: (typeof t.reportTitle === 'string' && t.reportTitle) ? t.reportTitle : DEFAULT_REPORT_TITLE,
+    customerHeading: (typeof t.customerHeading === 'string' && t.customerHeading) ? t.customerHeading : DEFAULT_CUSTOMER_HEADING,
+    customerFields: (t.customerFields && t.customerFields.length)
+        ? t.customerFields.map(f=>({label:f.label||'', role:f.role||''}))
+        : DEFAULT_CUSTOMER_FIELDS.map(f=>({label:f.label, role:f.role})),
+    summaryHeading: (typeof t.summaryHeading === 'string' && t.summaryHeading) ? t.summaryHeading : DEFAULT_SUMMARY_HEADING,
+    summaryFields: (t.summaryFields && t.summaryFields.length) ? t.summaryFields.slice() : DEFAULT_SUMMARY_FIELDS.slice(),
+    disclaimerHeading: (typeof t.disclaimerHeading === 'string' && t.disclaimerHeading) ? t.disclaimerHeading : DEFAULT_DISCLAIMER_HEADING,
+    publishedId: t.publishedId || null,
+    publishedDescription: t.publishedDescription || '',
+    publishedAuthor: t.publishedAuthor || '',
+    publishedWithDisclaimer: !!t.publishedWithDisclaimer,
+    sections: tplNormalize(t.sections)
+  }));
+  if(!state.templates.length){
+    state.templates = [{id:uid(), name:'Standard Leak Detection', isDefault:true, disclaimer:(state.business.disclaimerDefault || DEFAULT_DISCLAIMER), jobHeading:'Job Information', jobFields:DEFAULT_JOB_FIELDS.slice(),
+             reportTitle:DEFAULT_REPORT_TITLE, customerHeading:DEFAULT_CUSTOMER_HEADING,
+             customerFields:DEFAULT_CUSTOMER_FIELDS.map(f=>({label:f.label, role:f.role})),
+             summaryHeading:DEFAULT_SUMMARY_HEADING, summaryFields:DEFAULT_SUMMARY_FIELDS.slice(),
+             disclaimerHeading:DEFAULT_DISCLAIMER_HEADING, sections:tplNormalize(DEFAULT_CATEGORY_TEMPLATE)}];
+  }
+  if(!state.templates.some(t=>t.isDefault)) state.templates[0].isDefault = true;
+  const def = state.templates.find(t=>t.isDefault) || state.templates[0];
+  state.activeTemplateId = def.id;
+}
+function activeTemplate(){
+  return state.templates.find(t=>t.id===state.activeTemplateId) || state.templates[0];
+}
+function defaultTemplate(){
+  return state.templates.find(t=>t.isDefault) || state.templates[0];
+}
+async function persistTemplates(){
+  const payload = state.templates.map(t=>({
+    id: t.id, name: t.name, isDefault: t.isDefault, disclaimer: t.disclaimer || '',
+    jobHeading: t.jobHeading || 'Job Information',
+    jobFields: (t.jobFields||[]).filter(l=>l && l.trim()),
+    reportTitle: t.reportTitle || DEFAULT_REPORT_TITLE,
+    customerHeading: t.customerHeading || DEFAULT_CUSTOMER_HEADING,
+    customerFields: (t.customerFields||[]).filter(f=>f.label && f.label.trim()).map(f=>({label:f.label, role:f.role||''})),
+    summaryHeading: t.summaryHeading || DEFAULT_SUMMARY_HEADING,
+    summaryFields: (t.summaryFields||[]).filter(l=>l && l.trim()),
+    disclaimerHeading: t.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING,
+    publishedId: t.publishedId || null,
+    publishedDescription: t.publishedDescription || '',
+    publishedAuthor: t.publishedAuthor || '',
+    publishedWithDisclaimer: !!t.publishedWithDisclaimer,
+    sections: t.sections.map(s=>({ title:s.title, intro:s.intro, items:s.items.filter(l=>l && l.trim()) }))
+  }));
+  return await storeSet('category-presets', payload);
+}
+async function saveTemplate(){
+  const result = await persistTemplates();
+  if(!result.ok){ showToast('Could not save presets: '+result.message); return; }
+  showToast('Presets saved');
+}
+
+/* preset-level actions */
+function selectTemplate(id){ state.activeTemplateId = id; renderTemplate(); }
+function addTemplate(){
+  const t = {id:uid(), name:'New Preset', isDefault:false, disclaimer:(state.business.disclaimerDefault || DEFAULT_DISCLAIMER), jobHeading:'Job Information', jobFields:DEFAULT_JOB_FIELDS.slice(), sections:tplNormalize(DEFAULT_CATEGORY_TEMPLATE)};
+  state.templates.push(t);
+  state.activeTemplateId = t.id;
+  renderTemplate();
+  showToast('Preset created — rename it, then hit Save');
+}
+function duplicateTemplate(){
+  const cur = activeTemplate();
+  const copy = JSON.parse(JSON.stringify({name:cur.name+' (copy)', sections:cur.sections}));
+  const t = {id:uid(), name:copy.name, isDefault:false, disclaimer:cur.disclaimer||'', jobHeading:cur.jobHeading||'Job Information', jobFields:(cur.jobFields||DEFAULT_JOB_FIELDS).slice(),
+             reportTitle:cur.reportTitle||DEFAULT_REPORT_TITLE, customerHeading:cur.customerHeading||DEFAULT_CUSTOMER_HEADING,
+             customerFields:(cur.customerFields||DEFAULT_CUSTOMER_FIELDS).map(f=>({label:f.label, role:f.role||''})),
+             summaryHeading:cur.summaryHeading||DEFAULT_SUMMARY_HEADING, summaryFields:(cur.summaryFields||DEFAULT_SUMMARY_FIELDS).slice(),
+             disclaimerHeading:cur.disclaimerHeading||DEFAULT_DISCLAIMER_HEADING, sections:tplNormalize(copy.sections)};
+  state.templates.push(t);
+  state.activeTemplateId = t.id;
+  renderTemplate();
+  showToast('Preset duplicated');
+}
+function deleteTemplate(){
+  if(state.templates.length <= 1){ showToast('You need at least one preset'); return; }
+  const cur = activeTemplate();
+  if(!confirm('Delete the preset "'+cur.name+'"? This cannot be undone.')) return;
+  const wasDefault = cur.isDefault;
+  state.templates = state.templates.filter(t=>t.id!==cur.id);
+  if(wasDefault) state.templates[0].isDefault = true;
+  state.activeTemplateId = state.templates[0].id;
+  renderTemplate();
+  showToast('Preset deleted — hit Save to confirm');
+}
+function setDefaultTemplate(){
+  state.templates.forEach(t=> t.isDefault = (t.id === state.activeTemplateId));
+  renderTemplate();
+  showToast('Set as the default for new reports');
+}
+function renameTemplate(name){ activeTemplate().name = name; }
+
+/* section/item editing within the active preset */
+function findTplSection(id){ return activeTemplate().sections.find(s=>s.id===id); }
+function addTplSection(title){
+  if(!title || !title.trim()) return;
+  activeTemplate().sections.push({id:uid(), title:title.trim(), intro:'', items:[]});
+  renderTemplateSections();
+}
+function deleteTplSection(id){
+  if(!confirm('Remove this section from this preset?')) return;
+  const t = activeTemplate();
+  t.sections = t.sections.filter(s=>s.id!==id);
+  renderTemplateSections();
+}
+function moveTplSection(id, dir){
+  const arr = activeTemplate().sections, i = arr.findIndex(s=>s.id===id), j = i+dir;
+  if(j<0 || j>=arr.length) return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  renderTemplateSections();
+}
+function addTplItem(secId, label){
+  if(!label || !label.trim()) return;
+  findTplSection(secId).items.push(label.trim());
+  renderTemplateSections();
+}
+function deleteTplItem(secId, idx){ findTplSection(secId).items.splice(idx,1); renderTemplateSections(); }
+function moveTplItem(secId, idx, dir){
+  const items = findTplSection(secId).items, j = idx+dir;
+  if(j<0 || j>=items.length) return;
+  [items[idx],items[j]]=[items[j],items[idx]];
+  renderTemplateSections();
+}
+function resetTemplate(){
+  if(!confirm('Reset this preset back to the original default sections? Nothing is saved until you hit Save.')) return;
+  activeTemplate().sections = tplNormalize(DEFAULT_CATEGORY_TEMPLATE);
+  renderTemplateSections();
+  showToast('Reset — hit Save to keep this');
+}
+function goTemplate(){ state.view='template'; render(); }
+
+function addTplCustField(label){
+  if(!label || !label.trim()) return;
+  const t = activeTemplate(); t.customerFields = t.customerFields || [];
+  t.customerFields.push({label:label.trim(), role:''});
+  renderTplCustFields();
+}
+function deleteTplCustField(i){ activeTemplate().customerFields.splice(i,1); renderTplCustFields(); }
+function moveTplCustField(i,dir){
+  const a = activeTemplate().customerFields, j=i+dir;
+  if(j<0||j>=a.length) return;
+  [a[i],a[j]]=[a[j],a[i]]; renderTplCustFields();
+}
+function renderTplCustFields(){
+  const wrap = document.getElementById('tplCustFields');
+  if(!wrap) return;
+  const fields = activeTemplate().customerFields || [];
+  wrap.innerHTML = fields.map((f,i)=>`
+    <div class="tpl-item-row">
+      <input class="tpl-custlabel" data-idx="${i}" value="${esc(f.label)}" placeholder="Field name">
+      <select class="tpl-custrole" data-idx="${i}" style="border:1px solid var(--line);border-radius:6px;padding:6px;font-size:11.5px;font-family:'Inter',sans-serif;">
+        ${CUSTOMER_ROLES.map(r=>`<option value="${r.value}" ${r.value===(f.role||'')?'selected':''}>${r.label}</option>`).join('')}
+      </select>
+      <button class="btn btn-outline btn-sm" title="Move up" onclick="moveTplCustField(${i},-1)">&uarr;</button>
+      <button class="btn btn-outline btn-sm" title="Move down" onclick="moveTplCustField(${i},1)">&darr;</button>
+      <button class="item-del" onclick="deleteTplCustField(${i})">&times;</button>
+    </div>`).join('');
+  wrap.querySelectorAll('input.tpl-custlabel').forEach(inp=>{
+    inp.oninput = e => { activeTemplate().customerFields[+e.target.dataset.idx].label = e.target.value; };
+  });
+  wrap.querySelectorAll('select.tpl-custrole').forEach(sel=>{
+    sel.onchange = e => {
+      const idx = +e.target.dataset.idx, role = e.target.value, arr = activeTemplate().customerFields;
+      if(role) arr.forEach((f,i)=>{ if(i!==idx && f.role===role) f.role=''; });  // a role belongs to one field
+      arr[idx].role = role;
+      renderTplCustFields();
+    };
+  });
+}
+function addTplSumField(label){
+  if(!label || !label.trim()) return;
+  const t = activeTemplate(); t.summaryFields = t.summaryFields || [];
+  t.summaryFields.push(label.trim());
+  renderTplSumFields();
+}
+function deleteTplSumField(i){ activeTemplate().summaryFields.splice(i,1); renderTplSumFields(); }
+function moveTplSumField(i,dir){
+  const a = activeTemplate().summaryFields, j=i+dir;
+  if(j<0||j>=a.length) return;
+  [a[i],a[j]]=[a[j],a[i]]; renderTplSumFields();
+}
+function renderTplSumFields(){
+  const wrap = document.getElementById('tplSumFields');
+  if(!wrap) return;
+  wrap.innerHTML = (activeTemplate().summaryFields||[]).map((label,i)=>`
+    <div class="tpl-item-row">
+      <input class="tpl-sumfield" data-idx="${i}" value="${esc(label)}" placeholder="Field name">
+      <button class="btn btn-outline btn-sm" title="Move up" onclick="moveTplSumField(${i},-1)">&uarr;</button>
+      <button class="btn btn-outline btn-sm" title="Move down" onclick="moveTplSumField(${i},1)">&darr;</button>
+      <button class="item-del" onclick="deleteTplSumField(${i})">&times;</button>
+    </div>`).join('');
+  wrap.querySelectorAll('input.tpl-sumfield').forEach(inp=>{
+    inp.oninput = e => { activeTemplate().summaryFields[+e.target.dataset.idx] = e.target.value; };
+  });
+}
+
+
+function addTplJobField(label){
+  if(!label || !label.trim()) return;
+  const t = activeTemplate();
+  t.jobFields = t.jobFields || [];
+  t.jobFields.push(label.trim());
+  renderTplJobFields();
+}
+function deleteTplJobField(idx){ activeTemplate().jobFields.splice(idx,1); renderTplJobFields(); }
+function moveTplJobField(idx, dir){
+  const arr = activeTemplate().jobFields, j = idx+dir;
+  if(j<0 || j>=arr.length) return;
+  [arr[idx],arr[j]]=[arr[j],arr[idx]];
+  renderTplJobFields();
+}
+function renderTplJobFields(){
+  const wrap = document.getElementById('tplJobFields');
+  if(!wrap) return;
+  const fields = activeTemplate().jobFields || [];
+  wrap.innerHTML = fields.map((label,i)=>`
+    <div class="tpl-item-row">
+      <input class="tpl-jobfield" data-idx="${i}" value="${esc(label)}" placeholder="Field name">
+      <button class="btn btn-outline btn-sm" title="Move up" onclick="moveTplJobField(${i},-1)">&uarr;</button>
+      <button class="btn btn-outline btn-sm" title="Move down" onclick="moveTplJobField(${i},1)">&darr;</button>
+      <button class="item-del" onclick="deleteTplJobField(${i})">&times;</button>
+    </div>`).join('');
+  wrap.querySelectorAll('input.tpl-jobfield').forEach(inp=>{
+    inp.oninput = e => { activeTemplate().jobFields[+e.target.dataset.idx] = e.target.value; };
+  });
+}
+
+
+function renderPresetBar(){
+  const bar = document.getElementById('presetBar');
+  if(!bar) return;
+  const cur = activeTemplate();
+  bar.innerHTML = `
+    <div class="preset-tabs">
+      ${state.templates.map(t=>`
+        <button class="preset-tab ${t.id===state.activeTemplateId?'active':''}" onclick="selectTemplate('${t.id}')">
+          ${t.isDefault?'<span class="star">&#9733;</span> ':''}${esc(t.name)}
+        </button>`).join('')}
+      <button class="preset-tab" onclick="addTemplate()">+ New Preset</button>
+    </div>
+    <div class="preset-toolbar">
+      <input id="tplName" class="preset-name" value="${esc(cur.name)}" placeholder="Preset name">
+      ${cur.isDefault
+        ? '<span class="preset-default-badge">&#9733; Default for new reports</span>'
+        : '<button class="btn btn-outline btn-sm" onclick="setDefaultTemplate()">Make default</button>'}
+      <button class="btn btn-outline btn-sm" onclick="duplicateTemplate()">Duplicate</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTemplate()">Delete preset</button>
+    </div>
+    <div class="preset-toolbar" style="margin-top:-8px;">
+      ${cur.publishedId
+        ? `<span class="pub-state">&#9679; Submitted to the catalogue</span>
+           <button class="btn btn-outline btn-sm" onclick="showPublishDialog()">Update entry</button>
+           <button class="btn btn-outline btn-sm" onclick="unpublishPreset()">Unpublish</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="showPublishDialog()">Submit to catalogue</button>`}
+      <button class="btn btn-outline btn-sm" onclick="goCatalogue()">Browse catalogue</button>
+    </div>`;
+  const nameInput = document.getElementById('tplName');
+  // Update the matching tab label live. Deliberately no re-render on blur: rebuilding
+  // the toolbar here would detach whatever button the user is mid-click on and swallow it.
+  nameInput.oninput = e => {
+    renameTemplate(e.target.value);
+    const tab = bar.querySelector('.preset-tab.active');
+    if(tab) tab.innerHTML = (activeTemplate().isDefault ? '<span class="star">&#9733;</span> ' : '') + esc(e.target.value);
+  };
+  const disc = document.getElementById('tplDisclaimer');
+  if(disc){
+    disc.oninput = e => { activeTemplate().disclaimer = e.target.value; };
+    autoGrowTextareas(disc.parentNode);
+  }
+  const jh = document.getElementById('tplJobHeading');
+  if(jh) jh.oninput = e => { activeTemplate().jobHeading = e.target.value; };
+  const rt = document.getElementById('tplReportTitle');
+  if(rt) rt.oninput = e => { activeTemplate().reportTitle = e.target.value; };
+  const ch = document.getElementById('tplCustHeading');
+  if(ch) ch.oninput = e => { activeTemplate().customerHeading = e.target.value; };
+  const sh = document.getElementById('tplSumHeading');
+  if(sh) sh.oninput = e => { activeTemplate().summaryHeading = e.target.value; };
+  const dh = document.getElementById('tplDiscHeading');
+  if(dh) dh.oninput = e => { activeTemplate().disclaimerHeading = e.target.value; };
+  renderTplJobFields();
+  renderTplCustFields();
+  renderTplSumFields();
+}
+
+function renderTemplateSections(){
+  const wrap = document.getElementById('tplWrap');
+  if(!wrap) return;
+  wrap.innerHTML = activeTemplate().sections.map((sec,si)=>`
+    <div class="cat">
+      <div class="cat-head">
+        <div class="cat-tag">${String(si+1).padStart(2,'0')}</div>
+        <input class="cat-title tpl-title" value="${esc(sec.title)}" data-sec="${sec.id}" placeholder="Section title">
+        <button class="btn btn-outline btn-sm" title="Move up" onclick="moveTplSection('${sec.id}',-1)">&uarr;</button>
+        <button class="btn btn-outline btn-sm" title="Move down" onclick="moveTplSection('${sec.id}',1)">&darr;</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTplSection('${sec.id}')">Delete</button>
+      </div>
+      <div class="cat-body">
+        <textarea class="cat-intro tpl-intro" placeholder="Optional intro note shown under this section..." data-sec="${sec.id}">${esc(sec.intro)}</textarea>
+        ${sec.items.map((label,ii)=>`
+          <div class="tpl-item-row">
+            <input class="tpl-item" data-sec="${sec.id}" data-idx="${ii}" value="${esc(label)}" placeholder="Checklist item">
+            <button class="btn btn-outline btn-sm" title="Move up" onclick="moveTplItem('${sec.id}',${ii},-1)">&uarr;</button>
+            <button class="btn btn-outline btn-sm" title="Move down" onclick="moveTplItem('${sec.id}',${ii},1)">&darr;</button>
+            <button class="item-del" onclick="deleteTplItem('${sec.id}',${ii})">&times;</button>
+          </div>`).join('')}
+        <div class="add-item-row">
+          <input placeholder="Add checklist item..." id="newtplitem_${sec.id}" onkeydown="if(event.key==='Enter'){addTplItem('${sec.id}', this.value); this.value='';}">
+          <button class="btn btn-outline btn-sm" onclick="const i=document.getElementById('newtplitem_${sec.id}'); addTplItem('${sec.id}', i.value); i.value='';">+ Item</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  wrap.querySelectorAll('input.tpl-title').forEach(inp=>{ inp.oninput = e=>{ findTplSection(e.target.dataset.sec).title = e.target.value; }; });
+  wrap.querySelectorAll('textarea.tpl-intro').forEach(ta=>{ ta.oninput = e=>{ findTplSection(e.target.dataset.sec).intro = e.target.value; }; });
+  wrap.querySelectorAll('input.tpl-item').forEach(inp=>{ inp.oninput = e=>{ findTplSection(e.target.dataset.sec).items[+e.target.dataset.idx] = e.target.value; }; });
+  autoGrowTextareas(wrap);
+}
+
+/* ---------------- preset chooser when starting a new report ---------------- */
+function closePresetChooser(){
+  const el = document.getElementById('presetChooser');
+  if(el) el.remove();
+}
+function showPresetChooser(){
+  closePresetChooser();
+  const div = document.createElement('div');
+  div.id = 'presetChooser';
+  div.className = 'modal-backdrop';
+  div.onclick = e => { if(e.target === div) closePresetChooser(); };
+  div.innerHTML = `
+    <div class="modal">
+      <h3>Start a new report</h3>
+      <p>Which preset should it use?</p>
+      ${state.templates.map(t=>`
+        <button class="preset-choice" onclick="closePresetChooser(); newReport('${t.id}')">
+          <b>${t.isDefault?'&#9733; ':''}${esc(t.name)}</b>
+          <span>${t.sections.length} section${t.sections.length===1?'':'s'}</span>
+        </button>`).join('')}
+      <button class="btn btn-outline btn-block" onclick="closePresetChooser()">Cancel</button>
+    </div>`;
+  document.body.appendChild(div);
+}
+function startNewReport(){
+  if(state.templates.length > 1) showPresetChooser();
+  else newReport();
+}
+
+
+/* ---------------- public preset catalogue ---------------- */
+/* Presets carry structure only (headings, section titles, field labels),
+   never client values or report content — so sharing one cannot leak
+   customer data. Disclaimer text is the sole free-text field, so
+   including it is an explicit opt-in at publish time. */
+
+function presetToPublicData(t, includeDisclaimer){
+  return {
+    reportTitle:       t.reportTitle || DEFAULT_REPORT_TITLE,
+    customerHeading:   t.customerHeading || DEFAULT_CUSTOMER_HEADING,
+    customerFields:    (t.customerFields||[]).filter(f=>f.label && f.label.trim())
+                          .map(f=>({label:f.label, role:f.role||''})),
+    jobHeading:        t.jobHeading || 'Job Information',
+    jobFields:         (t.jobFields||[]).filter(l=>l && l.trim()),
+    summaryHeading:    t.summaryHeading || DEFAULT_SUMMARY_HEADING,
+    summaryFields:     (t.summaryFields||[]).filter(l=>l && l.trim()),
+    disclaimerHeading: t.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING,
+    disclaimer:        includeDisclaimer ? (t.disclaimer || '') : '',
+    sections:          (t.sections||[]).map(s=>({
+                          title: s.title || '',
+                          intro: s.intro || '',
+                          items: (s.items||[]).filter(l=>l && l.trim())
+                       }))
+  };
+}
+
+function countPresetItems(d){
+  return (d.sections||[]).reduce((n,s)=>n + (s.items||[]).length, 0);
+}
+
+async function loadCatalogue(){
+  if(!sb || !currentUserId()) return;
+  state.catBusy = true; renderCatalogue();
+  try{
+    const { data, error } = await sb.from('public_presets')
+      .select('id, owner_id, name, description, author_name, data, copy_count, updated_at, review_state, review_note')
+      .order('updated_at', { ascending:false });
+    if(error) throw error;
+    state.catalogue = data || [];
+    state.catError = null;
+  }catch(e){
+    console.error('catalogue load failed', e);
+    state.catalogue = [];
+    state.catError = e.message || String(e);
+  }
+  state.catBusy = false;
+  renderCatalogue();
+}
+
+function goCatalogue(){
+  state.view = 'catalogue';
+  render();
+  loadCatalogue();
+}
+function setCatSearch(v){ state.catSearch = v; renderCatalogueList(); }
+function toggleCatPreview(id){
+  state.catExpanded = (state.catExpanded === id) ? null : id;
+  // the same toggle serves the catalogue and the review queue, so
+  // refresh whichever list is actually on screen
+  if(state.view === 'review') renderReviewList(); else renderCatalogueList();
+}
+
+/* ---- publishing ---- */
+function showPublishDialog(){
+  const t = activeTemplate();
+  const already = !!t.publishedId;
+  const box = document.createElement('div');
+  box.id = 'publishDialog';
+  box.className = 'modal-backdrop';
+  box.onclick = e => { if(e.target === box) box.remove(); };
+  box.innerHTML = `
+    <div class="modal">
+      <h3>${already ? 'Update catalogue entry' : 'Submit to the catalogue'}</h3>
+      <p>An admin reviews submissions before they appear for other users. Editing an approved entry sends it back for review.</p>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Name</label>
+        <input id="pubName" value="${esc(t.name||'')}" maxlength="80">
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>What is it for? (optional)</label>
+        <textarea id="pubDesc" maxlength="240" style="min-height:60px;">${esc(t.publishedDescription||'')}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Published by</label>
+        <input id="pubAuthor" value="${esc(t.publishedAuthor || state.business.companyName || '')}" maxlength="60">
+      </div>
+      <label class="pub-check">
+        <input type="checkbox" id="pubDisc" ${t.publishedWithDisclaimer ? 'checked' : ''}>
+        <span>Also share my disclaimer text</span>
+      </label>
+      <div class="pub-note">
+        Shared either way: your headings, section titles, and field labels.
+        Never shared: clients, photos, videos, or anything from a report.
+        Your disclaimer often names your business and its terms, so it stays out unless you tick the box.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="document.getElementById('publishDialog').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="publishPreset()">${already ? 'Update' : 'Publish'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(box);
+}
+
+async function publishPreset(){
+  const t = activeTemplate();
+  const name   = (document.getElementById('pubName').value||'').trim();
+  const desc   = (document.getElementById('pubDesc').value||'').trim();
+  const author = (document.getElementById('pubAuthor').value||'').trim();
+  const incDisc = document.getElementById('pubDisc').checked;
+  if(!name){ showToast('Give it a name first'); return; }
+
+  const id = t.publishedId || uid();
+  try{
+    const { error } = await sb.from('public_presets').upsert({
+      id,
+      owner_id: currentUserId(),
+      name,
+      description: desc || null,
+      author_name: author || null,
+      data: presetToPublicData(t, incDisc)
+    }, { onConflict:'id' });
+    if(error) throw error;
+    t.publishedId = id;
+    t.publishedDescription = desc;
+    t.publishedAuthor = author;
+    t.publishedWithDisclaimer = incDisc;
+    await persistTemplates();
+    const dlg = document.getElementById('publishDialog');
+    if(dlg) dlg.remove();
+    showToast('Submitted — an admin will review it before it appears for others');
+    renderPresetBar();
+  }catch(e){
+    showToast('Could not publish: ' + (e.message || 'unknown error'));
+  }
+}
+
+async function unpublishPreset(){
+  const t = activeTemplate();
+  if(!t.publishedId) return;
+  if(!confirm('Remove this preset from the public catalogue? Your own copy stays put.')) return;
+  try{
+    const { error } = await sb.from('public_presets').delete().eq('id', t.publishedId);
+    if(error) throw error;
+    t.publishedId = null;
+    await persistTemplates();
+    showToast('Removed from the catalogue');
+    renderPresetBar();
+  }catch(e){
+    showToast('Could not remove it: ' + (e.message || 'unknown error'));
+  }
+}
+
+/* ---- copying ---- */
+async function copyFromCatalogue(id){
+  const entry = state.catalogue.find(c=>c.id===id);
+  if(!entry) return;
+  const d = entry.data || {};
+  const t = {
+    id: uid(),
+    name: (entry.name || 'Copied preset').slice(0,80),
+    isDefault: false,
+    reportTitle:       d.reportTitle || DEFAULT_REPORT_TITLE,
+    customerHeading:   d.customerHeading || DEFAULT_CUSTOMER_HEADING,
+    customerFields:    (d.customerFields && d.customerFields.length)
+                          ? d.customerFields.map(f=>({label:f.label||'', role:f.role||''}))
+                          : DEFAULT_CUSTOMER_FIELDS.map(f=>({label:f.label, role:f.role})),
+    jobHeading:        d.jobHeading || 'Job Information',
+    jobFields:         (d.jobFields && d.jobFields.length) ? d.jobFields.slice() : DEFAULT_JOB_FIELDS.slice(),
+    summaryHeading:    d.summaryHeading || DEFAULT_SUMMARY_HEADING,
+    summaryFields:     (d.summaryFields && d.summaryFields.length) ? d.summaryFields.slice() : DEFAULT_SUMMARY_FIELDS.slice(),
+    disclaimerHeading: d.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING,
+    disclaimer:        d.disclaimer || state.business.disclaimerDefault || DEFAULT_DISCLAIMER,
+    sections:          tplNormalize(d.sections || DEFAULT_CATEGORY_TEMPLATE),
+    publishedId: null
+  };
+  state.templates.push(t);
+  const res = await persistTemplates();
+  if(!res.ok){
+    state.templates = state.templates.filter(x=>x.id!==t.id);
+    showToast('Could not save the copy: ' + res.message);
+    return;
+  }
+  try{ await sb.rpc('increment_preset_copies', { preset_id: id }); }catch(e){ /* cosmetic only */ }
+  state.activeTemplateId = t.id;
+  showToast('Copied into your presets');
+  state.view = 'template';
+  render();
+}
+
+/* ---- rendering ---- */
+function catalogueMatches(){
+  const q = (state.catSearch||'').toLowerCase();
+  if(!q) return state.catalogue;
+  return state.catalogue.filter(c =>
+    (c.name||'').toLowerCase().includes(q) ||
+    (c.description||'').toLowerCase().includes(q) ||
+    (c.author_name||'').toLowerCase().includes(q) ||
+    (c.data && (c.data.sections||[]).some(s=>(s.title||'').toLowerCase().includes(q)))
+  );
+}
+
+function renderCatalogueList(){
+  const wrap = document.getElementById('catList');
+  if(!wrap) return;
+  if(state.catBusy){ wrap.innerHTML = '<div class="cat-empty">Loading…</div>'; return; }
+  if(state.catError){
+    wrap.innerHTML = `<div class="msg err">Could not load the catalogue: ${esc(state.catError)}<br>
+      <span style="font-size:12px;">If this is the first run, check that <code>supabase-catalogue-setup.sql</code> has been run.</span></div>`;
+    return;
+  }
+  const items = catalogueMatches();
+  if(!items.length){
+    wrap.innerHTML = `<div class="cat-empty">${state.catalogue.length
+      ? 'Nothing matches that search.'
+      : 'The catalogue is empty. Publish one of your presets to start it off.'}</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(c=>{
+    const d = c.data || {};
+    const mine = c.owner_id === currentUserId();
+    const open = state.catExpanded === c.id;
+    return `
+    <div class="cat-card">
+      <div class="cat-head">
+        <div style="flex:1;min-width:180px;">
+          <div class="cat-name">${esc(c.name||'Untitled')}${mine?' <span class="cat-mine">yours</span>':''}${mine?' '+reviewBadge(c.review_state||'pending'):''}</div>
+          <div class="cat-meta">
+            ${c.author_name ? esc(c.author_name)+' &middot; ' : ''}
+            ${(d.sections||[]).length} section${(d.sections||[]).length===1?'':'s'} &middot;
+            ${countPresetItems(d)} items${c.copy_count ? ' &middot; copied '+c.copy_count+'&times;' : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="toggleCatPreview('${c.id}')">${open?'Hide':'Preview'}</button>
+          <button class="btn btn-primary btn-sm" onclick="copyFromCatalogue('${c.id}')">Copy to my presets</button>
+        </div>
+      </div>
+      ${c.description ? `<div class="cat-desc">${esc(c.description)}</div>` : ''}
+      ${mine && c.review_note ? `<div class="rev-note">Reviewer note: ${esc(c.review_note)}</div>` : ''}
+      ${open ? cataloguePreviewHtml(d) : ''}
+    </div>`;
+  }).join('');
+}
+
+
+/* ---------------- catalogue moderation ---------------- */
+async function checkAdmin(){
+  if(!sb || !currentUserId()){ state.isAdmin = false; return; }
+  try{
+    const { data, error } = await sb.rpc('is_admin');
+    if(error) throw error;
+    state.isAdmin = !!data;
+  }catch(e){ state.isAdmin = false; }
+}
+
+function reviewBadge(st){
+  if(st === 'approved') return '<span class="rev-badge ok">Live</span>';
+  if(st === 'rejected') return '<span class="rev-badge no">Not approved</span>';
+  return '<span class="rev-badge wait">Pending review</span>';
+}
+
+function goReview(){
+  state.view = 'review';
+  render();
+  loadReviewQueue();
+}
+
+async function loadReviewQueue(){
+  if(!sb || !state.isAdmin) return;
+  state.revBusy = true; renderReviewList();
+  try{
+    const { data, error } = await sb.from('public_presets')
+      .select('id, owner_id, name, description, author_name, data, review_state, review_note, copy_count, updated_at')
+      .order('updated_at', { ascending:false });
+    if(error) throw error;
+    state.reviewQueue = data || [];
+    state.revError = null;
+  }catch(e){
+    state.reviewQueue = [];
+    state.revError = e.message || String(e);
+  }
+  state.revBusy = false;
+  renderReviewList();
+}
+
+function setRevFilter(f){ state.revFilter = f; renderReviewList(); }
+
+async function reviewPreset(id, newState){
+  let note = null;
+  if(newState === 'rejected'){
+    try{ note = prompt('Why is this being turned down? (optional — the publisher sees this)') || null; }
+    catch(e){ note = null; }
+  }
+  try{
+    const { error } = await sb.rpc('review_preset', { preset_id:id, new_state:newState, note });
+    if(error) throw error;
+    showToast(newState === 'approved' ? 'Approved — now visible to everyone' : 'Turned down');
+    await loadReviewQueue();
+  }catch(e){
+    showToast('Could not update: ' + (e.message || 'unknown error'));
+  }
+}
+
+async function adminDeleteEntry(id){
+  if(!confirm('Delete this catalogue entry outright? The publisher keeps their own copy.')) return;
+  try{
+    const { error } = await sb.from('public_presets').delete().eq('id', id);
+    if(error) throw error;
+    showToast('Entry deleted');
+    await loadReviewQueue();
+  }catch(e){
+    showToast('Could not delete: ' + (e.message || 'unknown error'));
+  }
+}
+
+function renderReviewList(){
+  const wrap = document.getElementById('revList');
+  if(!wrap) return;
+  if(state.revBusy){ wrap.innerHTML = '<div class="cat-empty">Loading…</div>'; return; }
+  if(state.revError){
+    wrap.innerHTML = `<div class="msg err">Could not load the queue: ${esc(state.revError)}<br>
+      <span style="font-size:12px;">Check that <code>supabase-moderation-setup.sql</code> has been run.</span></div>`;
+    return;
+  }
+  const f = state.revFilter || 'pending';
+  const items = state.reviewQueue.filter(c => f === 'all' ? true : (c.review_state||'pending') === f);
+  const counts = {
+    pending:  state.reviewQueue.filter(c=>(c.review_state||'pending')==='pending').length,
+    approved: state.reviewQueue.filter(c=>c.review_state==='approved').length,
+    rejected: state.reviewQueue.filter(c=>c.review_state==='rejected').length,
+    all:      state.reviewQueue.length
+  };
+  const chips = [['pending','Pending'],['approved','Live'],['rejected','Turned down'],['all','All']]
+    .map(([k,lbl])=>`<button class="filter-chip ${f===k?'active':''}" onclick="setRevFilter('${k}')">${lbl} <span class="cnt">${counts[k]}</span></button>`).join('');
+
+  wrap.innerHTML = `<div class="filter-chips">${chips}</div>` + (items.length ? items.map(c=>{
+    const d = c.data || {};
+    const st = c.review_state || 'pending';
+    return `
+    <div class="cat-card">
+      <div class="cat-head">
+        <div style="flex:1;min-width:180px;">
+          <div class="cat-name">${esc(c.name||'Untitled')} ${reviewBadge(st)}</div>
+          <div class="cat-meta">
+            ${c.author_name ? esc(c.author_name)+' &middot; ' : ''}
+            ${(d.sections||[]).length} sections &middot; ${countPresetItems(d)} items
+            ${d.disclaimer ? ' &middot; includes a disclaimer' : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="toggleCatPreview('${c.id}')">${state.catExpanded===c.id?'Hide':'Inspect'}</button>
+          ${st !== 'approved' ? `<button class="btn btn-primary btn-sm" onclick="reviewPreset('${c.id}','approved')">Approve</button>` : ''}
+          ${st !== 'rejected' ? `<button class="btn btn-outline btn-sm" onclick="reviewPreset('${c.id}','rejected')">Turn down</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="adminDeleteEntry('${c.id}')">Delete</button>
+        </div>
+      </div>
+      ${c.description ? `<div class="cat-desc">${esc(c.description)}</div>` : ''}
+      ${c.review_note ? `<div class="rev-note">Reviewer note: ${esc(c.review_note)}</div>` : ''}
+      ${state.catExpanded===c.id ? cataloguePreviewHtml(d) : ''}
+    </div>`;
+  }).join('') : `<div class="cat-empty">Nothing ${f==='all'?'in the catalogue':'in this state'}.</div>`);
+}
+
+function cataloguePreviewHtml(d){
+  return `<div class="cat-preview">
+    <div class="cat-prev-row"><b>Report title</b> ${esc(d.reportTitle||'—')}</div>
+    <div class="cat-prev-row"><b>${esc(d.customerHeading||'Customer')}</b> ${(d.customerFields||[]).map(f=>esc(f.label)).join(', ')||'—'}</div>
+    <div class="cat-prev-row"><b>${esc(d.jobHeading||'Job')}</b> ${(d.jobFields||[]).map(esc).join(', ')||'—'}</div>
+    <div class="cat-prev-row"><b>${esc(d.summaryHeading||'Summary')}</b> ${(d.summaryFields||[]).map(esc).join(', ')||'—'}</div>
+    ${(d.sections||[]).map((s,i)=>`
+      <div class="cat-sect">
+        <div class="cat-sect-title">${i+1}. ${esc(s.title||'')}</div>
+        ${(s.items||[]).length ? `<div class="cat-sect-items">${(s.items||[]).map(esc).join(' &middot; ')}</div>` : ''}
+      </div>`).join('')}
+    ${d.disclaimer ? `<div class="cat-prev-row" style="margin-top:8px;"><b>Disclaimer</b><div class="cat-disc">${esc(d.disclaimer)}</div></div>`
+                   : `<div class="cat-prev-row" style="margin-top:8px;"><b>Disclaimer</b> not shared</div>`}
+  </div>`;
+}
+
+/* ---------------- rendering ---------------- */
+function renderReview(){
+  if(state.view !== 'review') return;
+  const app = document.getElementById('mainPanel');
+  app.innerHTML = `
+    <div class="editor-header">
+      <h1>Catalogue Review</h1>
+      <button class="btn btn-outline btn-sm" onclick="closeMain()">&#10005; Close</button>
+    </div>
+    <p style="color:var(--text-soft);font-size:13px;margin-top:-10px;">Submissions stay hidden from other users until you approve them.</p>
+    <div id="revList"></div>
+  `;
+  renderReviewList();
+}
+
+function renderCatalogue(){
+  if(state.view !== 'catalogue') return;
+  const app = document.getElementById('mainPanel');
+  app.innerHTML = `
+    <div class="editor-header">
+      <h1>Preset Catalogue</h1>
+      <button class="btn btn-outline btn-sm" onclick="closeMain()">&#10005; Close</button>
+    </div>
+    <p style="color:var(--text-soft);font-size:13px;margin-top:-10px;">Presets shared by other users. Copy any of them into your own list and edit freely.</p>
+    <input class="search" placeholder="Search catalogue..." value="${esc(state.catSearch||'')}" oninput="setCatSearch(this.value)"
+           style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--paper-2);font-size:14px;margin:14px 0 16px;">
+    <div id="catList"></div>
+  `;
+  renderCatalogueList();
+}
+
+function renderTemplate(){
+  const app = document.getElementById('mainPanel');
+  app.innerHTML = `
+    <div class="editor-header">
+      <h1>Preset Sections</h1>
+      <button class="btn btn-outline btn-sm" onclick="closeMain()">&#10005; Close</button>
+    </div>
+    <p style="color:var(--text-soft);font-size:13px;margin-top:-10px;">Save as many presets as you like. The one marked &#9733; is used by default for new reports. Blocks appear here in the same order they print in the PDF.</p>
+    <div id="presetBar"></div>
+    <div class="card">
+      <h3>Report title</h3>
+      <div class="subnote">The headline printed at the top of the PDF.</div>
+      <input id="tplReportTitle" value="${esc(activeTemplate().reportTitle || DEFAULT_REPORT_TITLE)}" style="width:100%;padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:14px;font-family:'Inter',sans-serif;">
+    </div>
+    <div class="card">
+      <h3>Customer Info</h3>
+      <div class="subnote">Tag a field with a role so the app knows which value is the client name, address or email.</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Heading</label>
+        <input id="tplCustHeading" value="${esc(activeTemplate().customerHeading || DEFAULT_CUSTOMER_HEADING)}" placeholder="Customer Information">
+      </div>
+      <div id="tplCustFields"></div>
+      <div class="add-item-row">
+        <input placeholder="Add customer field, e.g. Gate Code" id="newTplCustField" onkeydown="if(event.key==='Enter'){addTplCustField(this.value); this.value='';}">
+        <button class="btn btn-outline btn-sm" onclick="const i=document.getElementById('newTplCustField'); addTplCustField(i.value); i.value='';">+ Field</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Job Info</h3>
+      <div class="subnote">The heading and the fields that new reports start with.</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Heading</label>
+        <input id="tplJobHeading" value="${esc(activeTemplate().jobHeading || 'Job Information')}" placeholder="Job Information">
+      </div>
+      <div id="tplJobFields"></div>
+      <div class="add-item-row">
+        <input placeholder="Add job field, e.g. Warranty Expires" id="newTplJobField" onkeydown="if(event.key==='Enter'){addTplJobField(this.value); this.value='';}">
+        <button class="btn btn-outline btn-sm" onclick="const i=document.getElementById('newTplJobField'); addTplJobField(i.value); i.value='';">+ Field</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Summary</h3>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Heading</label>
+        <input id="tplSumHeading" value="${esc(activeTemplate().summaryHeading || DEFAULT_SUMMARY_HEADING)}" placeholder="Summary">
+      </div>
+      <div id="tplSumFields"></div>
+      <div class="add-item-row">
+        <input placeholder="Add summary field, e.g. Parts Needed" id="newTplSumField" onkeydown="if(event.key==='Enter'){addTplSumField(this.value); this.value='';}">
+        <button class="btn btn-outline btn-sm" onclick="const i=document.getElementById('newTplSumField'); addTplSumField(i.value); i.value='';">+ Field</button>
+      </div>
+    </div>
+    <div class="tpl-sections-label">Inspection Sections</div>
+    <div id="tplWrap"></div>
+    <div class="add-cat-bar">
+      <input id="newTplSection" placeholder="New preset section, e.g. Spa Jet Test" onkeydown="if(event.key==='Enter'){addTplSection(this.value); this.value='';}">
+      <button class="btn btn-outline" onclick="const i=document.getElementById('newTplSection'); addTplSection(i.value); i.value='';">+ Add Section</button>
+    </div>
+    <div class="card">
+      <h3>Disclaimer</h3>
+      <div class="subnote">Reports started from this preset begin with this text. You can still edit it per report.</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Heading</label>
+        <input id="tplDiscHeading" value="${esc(activeTemplate().disclaimerHeading || DEFAULT_DISCLAIMER_HEADING)}" placeholder="Disclaimer">
+      </div>
+      <textarea id="tplDisclaimer" style="width:100%;min-height:90px;padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:12.5px;font-family:'Inter',sans-serif;">${esc(activeTemplate().disclaimer||'')}</textarea>
+    </div>
+    <div class="sticky-actions">
+      <button class="btn btn-outline" onclick="resetTemplate()">Reset sections</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Save Presets</button>
+    </div>
+  `;
+  renderPresetBar();
+  renderTemplateSections();
+}
+
+const MAIN_EL = 'mainPanel';
+function render(){
+  if(state.recovering || !state.session){ document.getElementById('sidebar').innerHTML = ''; return renderLogin(); }
+  renderSidebar();
+  if(state.view==='editor') renderEditor();
+  else if(state.view==='settings') renderSettings();
+  else if(state.view==='template') renderTemplate();
+  else if(state.view==='catalogue') renderCatalogue();
+  else if(state.view==='review') renderReview();
+  else renderMainEmpty();
+}
+
+function renderSidebar(){
+  const sidebar = document.getElementById('sidebar');
+  const items = filteredReports();
+  sidebar.innerHTML = `
+    <div class="brand">
+      <div class="ripple-mark"><span></span><span></span></div>
+      <div><div class="brand-name">LeakTrace</div><div class="brand-sub">Desktop · Field Report Builder</div></div>
+    </div>
+    <div class="sidebar-actions">
+      <button class="btn btn-primary btn-block" onclick="startNewReport()">+ New Report</button>
+      <button class="btn btn-ghost btn-block" onclick="goSettings()">Business Settings</button>
+      <button class="btn btn-ghost btn-block" onclick="signOut()">Sign out</button>
+      <button class="btn btn-ghost btn-block" onclick="goTemplate()">Preset Sections</button>
+      <button class="btn btn-ghost btn-block" onclick="goCatalogue()">Catalogue</button>
+      ${state.isAdmin ? '<button class="btn btn-ghost btn-block" onclick="goReview()">Review queue</button>' : ''}
+      <label class="btn btn-ghost btn-block" style="cursor:pointer;">Restore Backup<input type="file" accept="application/json" style="display:none;" onchange="restoreReportBackup(this.files)"></label>
+    </div>
+    <input class="sidebar-search" placeholder="Search by number, client or address..." value="${esc(state.search)}" oninput="state.search=this.value; renderSidebar();">
+    <div class="filter-chips">
+      ${STATUS_FILTERS.map(f=>`<button class="filter-chip ${state.statusFilter===f?'active':''}" onclick="setStatusFilter('${f}')">${f} <span class="cnt">${statusCount(f)}</span></button>`).join('')}
+    </div>
+    <div class="sidebar-list" id="sidebarList"></div>
+  `;
+  const list = document.getElementById('sidebarList');
+  if(!items.length){
+    list.innerHTML = `<div class="sidebar-empty">${state.reportsIndex.length?'No reports match this filter or search.':'No reports yet. Start your first inspection report.'}</div>`;
+    return;
+  }
+  list.innerHTML = items.map(r=>`
+    <div class="sidebar-card ${state.current && state.current.id===r.id ? 'active':''}" onclick="openReport('${r.id}')">
+      <div class="rc-name">${fmtReportNo(r.reportNumber)?`<span class="rc-no">${fmtReportNo(r.reportNumber)}</span> `:''}${esc(r.clientName||'Untitled report')}</div>
+      <div class="rc-meta">${esc(r.address||'No address')} &middot; ${esc(r.date||'')}</div>
+      <div class="row-bottom">
+        <span class="status-pill ${statusPillClass(r.status)}">${esc(r.status||'Draft')}</span>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteReport('${r.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderMainEmpty(){
+  document.getElementById('mainPanel').innerHTML = `
+    <div class="empty-main">
+      <div class="ripple-mark"><span></span><span></span></div>
+      <h2>Select a report, or start a new one</h2>
+      <p>Your reports are listed on the left. Pick one to keep editing, or create a new inspection report to get started.</p>
+      <button class="btn btn-primary" onclick="startNewReport()" style="margin-top:6px;">+ New Report</button>
+    </div>`;
+}
+
+function closeMain(){ state.view='list'; state.current=null; render(); }
+function goSettings(){ state.view='settings'; render(); }
+
+function renderSettings(){
+  const app = document.getElementById('mainPanel'); const b = state.business;
+  app.innerHTML = `
+    <div class="editor-header">
+      <h1>Business Settings</h1>
+      <button class="btn btn-outline btn-sm" onclick="closeMain()">✕ Close</button>
+    </div>
+    <p style="color:var(--text-soft);font-size:13px;margin-top:-10px;">Shown on every report's letterhead and footer.</p>
+    <div class="card">
+      <div class="letterhead-preview">
+        <div class="logo-box" id="logoBox">${b.logoDataUrl? `<img src="${b.logoDataUrl}">`:'Logo'}</div>
+        <label class="add-photo-label">Upload logo<input type="file" accept="image/*" onchange="handleLogoFile(this.files)"></label>
+        ${b.logoDataUrl ? `<button class="btn btn-outline btn-sm" onclick="removeLogo()">Remove logo</button>` : ''}
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Company name</label><input id="s_name" value="${esc(b.companyName)}"></div>
+        <div class="field"><label>Phone</label><input id="s_phone" value="${esc(b.companyPhone)}"></div>
+      </div>
+      <div class="field"><label>Email</label><input id="s_email" value="${esc(b.companyEmail)}"></div>
+      <div class="field" style="margin-top:12px;">
+        <label>PDF header colour (the business info band at the top of the report)</label>
+        <div class="color-row">
+          <input type="color" id="s_headercolor" value="${esc(b.headerColor || '#004179')}">
+          <input type="text" id="s_headerhex" value="${esc(b.headerColor || '#004179')}" placeholder="#004179">
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Disclaimer</label>
+        <div class="subnote" style="margin:0;">Disclaimer text now lives with each preset, so different report types can carry different terms. Edit it under <b>Preset Sections</b>.</div>
+      </div>
+    </div>
+    <div class="sticky-actions"><button class="btn btn-primary" onclick="collectSettingsAndSave()">Save Settings</button></div>
+  `;
+  autoGrowTextareas(app);
+  wireHeaderColor();
+}
+function collectSettingsAndSave(){
+  state.business.companyName = document.getElementById('s_name').value;
+  state.business.companyPhone = document.getElementById('s_phone').value;
+  state.business.companyEmail = document.getElementById('s_email').value;
+  const hex = document.getElementById('s_headercolor').value;
+  state.business.headerColor = /^#[0-9a-f]{6}$/i.test(hex) ? hex : '#004179';
+  saveBusiness();
+}
+function wireHeaderColor(){
+  const picker = document.getElementById('s_headercolor');
+  const hexbox = document.getElementById('s_headerhex');
+  if(!picker || !hexbox) return;
+  picker.oninput = e => { hexbox.value = e.target.value; };
+  hexbox.oninput = e => { if(/^#[0-9a-f]{6}$/i.test(e.target.value.trim())) picker.value = e.target.value.trim(); };
+}
+
+function renderEditor(){
+  const app = document.getElementById('mainPanel'); const r = state.current;
+  app.innerHTML = `
+    <div class="editor-header">
+      <h1>${esc(r.clientName||'Untitled report')}</h1>
+      <button class="btn btn-outline btn-sm" onclick="closeMain()">✕ Close</button>
+    </div>
+    <div class="card">
+      <h3>${esc(r.customerHeading || DEFAULT_CUSTOMER_HEADING)}</h3>
+      <div id="custFieldsWrap"></div>
+      <button class="btn btn-outline btn-sm" onclick="addCustomerField()" style="margin-bottom:12px;">+ Add field</button>
+      <div class="field"><label>Report status</label>
+        <select id="f_status" style="max-width:200px;">
+          <option value="Draft" ${r.status==='Draft'?'selected':''}>Draft</option>
+          <option value="Sent" ${r.status==='Sent'?'selected':''}>Sent</option>
+          <option value="Complete" ${r.status==='Complete'?'selected':''}>Complete</option>
+        </select>
+      </div>
+      <div class="share-box">
+        <label class="row">
+          <input type="checkbox" id="f_shared" ${r.sharedWithClient?'checked':''}>
+          <span>Let this client sign in and view this report</span>
+        </label>
+        <div class="share-hint" id="shareHint"></div>
+      </div>
+    </div>
+    </div>
+
+    <div class="card">
+      <h3>${esc(r.jobHeading || 'Job Information')}</h3>
+      <div class="subnote">Add, rename, or remove fields as needed for this job.</div>
+      <div id="jobFieldsWrap" class="job-fields-grid"></div>
+      <button class="btn btn-outline btn-sm" onclick="addJobField()">+ Add field</button>
+    </div>
+
+    <div class="card">
+      <h3>${esc(r.summaryHeading || DEFAULT_SUMMARY_HEADING)}</h3>
+      <div id="summaryFieldsWrap"></div>
+      <button class="btn btn-outline btn-sm" onclick="addSummaryField()">+ Add field</button>
+    </div>
+
+    <div id="catsWrap"></div>
+
+    <div class="add-cat-bar">
+      <input id="newCatInput" placeholder="New section name, e.g. Spa Jet Test" onkeydown="if(event.key==='Enter'){addCategory(this.value); this.value='';}">
+      <button class="btn btn-outline" onclick="const i=document.getElementById('newCatInput'); addCategory(i.value); i.value='';">+ Add Section</button>
+      <button class="btn btn-outline" onclick="saveAsTemplate()">Set as default template</button>
+    </div>
+
+    <div class="card">
+      <h3>${esc(r.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING)}</h3>
+      <textarea id="f_disclaimer" style="min-height:90px; width:100%; padding:9px 10px; border-radius:7px; border:1px solid var(--line); font-size:12.5px;">${esc(r.disclaimer)}</textarea>
+    </div>
+
+    <div class="sticky-actions">
+      <button class="btn btn-outline" onclick="deleteReport('${r.id}')">Delete Report</button>
+      <button class="btn btn-outline" onclick="downloadReportBackup(false)">Download Backup</button>
+      <button class="btn btn-outline" onclick="saveCurrentReport(false)">Save</button>
+      <button class="btn btn-outline" onclick="emailPDF()">📧 Email PDF</button>
+      <button class="btn btn-primary" onclick="exportPDF()">Export PDF</button>
+    </div>
+  `;
+
+  const bind = (id, prop) => document.getElementById(id).oninput = e => { r[prop] = e.target.value; };
+  bind('f_disclaimer','disclaimer');
+  document.getElementById('f_status').onchange = e => { r.status = e.target.value; };
+  const shareBox = document.getElementById('f_shared');
+  if(shareBox){
+    shareBox.onchange = e => { r.sharedWithClient = e.target.checked; updateShareHint(); };
+  }
+  updateShareHint();
+
+  renderCustomerFields();
+  renderSummaryFields();
+  renderJobFields();
+  renderCategories();
+  autoGrowTextareas(app);
+}
+
+
+function addCustomerField(){ state.current.customerFields.push({id:uid(), label:'New Field', role:'', value:''}); renderEditor(); }
+function deleteCustomerField(id){ state.current.customerFields = state.current.customerFields.filter(f=>f.id!==id); renderEditor(); }
+function renderCustomerFields(){
+  const wrap = document.getElementById('custFieldsWrap');
+  if(!wrap) return;
+  wrap.innerHTML = state.current.customerFields.map(f=>`
+    <div class="kv-row">
+      <textarea class="kv-label" rows="1" data-id="${f.id}" data-part="label" placeholder="Field name">${esc(f.label)}</textarea>
+      <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value">${esc(f.value)}</textarea>
+      <button class="item-del" onclick="deleteCustomerField('${f.id}')">&times;</button>
+    </div>`).join('');
+  wrap.querySelectorAll('textarea').forEach(inp=>{
+    inp.oninput = e => {
+      const f = state.current.customerFields.find(x=>x.id===e.target.dataset.id);
+      if(f) f[e.target.dataset.part] = e.target.value;
+    };
+  });
+  autoGrowTextareas(wrap);
+}
+function addSummaryField(){ state.current.summaryFields.push({id:uid(), label:'New Field', value:''}); renderEditor(); }
+function deleteSummaryField(id){ state.current.summaryFields = state.current.summaryFields.filter(f=>f.id!==id); renderEditor(); }
+function renderSummaryFields(){
+  const wrap = document.getElementById('summaryFieldsWrap');
+  if(!wrap) return;
+  wrap.innerHTML = state.current.summaryFields.map(f=>`
+    <div class="field" style="margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input class="sum-label" data-id="${f.id}" value="${esc(f.label)}" placeholder="Field name"
+               style="flex:1;border:none;background:transparent;font-size:11.5px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.4px;padding:2px;">
+        <button class="item-del" onclick="deleteSummaryField('${f.id}')">&times;</button>
+      </div>
+      <textarea class="sum-value" data-id="${f.id}" style="min-height:56px;">${esc(f.value)}</textarea>
+    </div>`).join('');
+  wrap.querySelectorAll('input.sum-label').forEach(inp=>{
+    inp.oninput = e => { const f = state.current.summaryFields.find(x=>x.id===e.target.dataset.id); if(f) f.label = e.target.value; };
+  });
+  wrap.querySelectorAll('textarea.sum-value').forEach(ta=>{
+    ta.oninput = e => { const f = state.current.summaryFields.find(x=>x.id===e.target.dataset.id); if(f) f.value = e.target.value; };
+  });
+  autoGrowTextareas(wrap);
+}
+
+function updateShareHint(){
+  const el = document.getElementById('shareHint');
+  if(!el || !state.current) return;
+  const email = (reportEmail(state.current)||'').trim();
+  if(!state.current.sharedWithClient){
+    el.className = 'share-hint';
+    el.textContent = 'Off — only you can see this report.';
+    return;
+  }
+  if(!email){
+    el.className = 'share-hint warn';
+    el.textContent = 'No client email set. Fill in the field tagged with the Email role above, or the client will not be able to reach this report.';
+    return;
+  }
+  el.className = 'share-hint';
+  el.textContent = 'Visible to ' + email + ' after they sign in to the portal.';
+}
+
+function renderJobFields(){
+  const wrap = document.getElementById('jobFieldsWrap');
+  wrap.innerHTML = state.current.jobFields.map(f=>`
+    <div class="kv-row">
+      <textarea class="kv-label" rows="1" data-id="${f.id}" data-part="label" placeholder="Field name">${esc(f.label)}</textarea>
+      <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value">${esc(f.value)}</textarea>
+      <button class="item-del" onclick="deleteJobField('${f.id}')">&times;</button>
+    </div>`).join('');
+  wrap.querySelectorAll('textarea').forEach(inp=>{
+    inp.oninput = e => {
+      const f = state.current.jobFields.find(x=>x.id===e.target.dataset.id);
+      if(f) f[e.target.dataset.part] = e.target.value;
+    };
+  });
+  autoGrowTextareas(wrap);
+}
+
+function renderCategories(){
+  const wrap = document.getElementById('catsWrap');
+  const cats = state.current.categories;
+  wrap.innerHTML = cats.map((cat,ci)=>`
+    <div class="cat">
+      <div class="cat-head">
+        <div class="cat-tag">${String(ci+1).padStart(2,'0')}</div>
+        <input class="cat-title" value="${esc(cat.title)}" data-cat="${cat.id}" placeholder="Section title">
+        <button class="btn btn-outline btn-sm" title="Move up" onclick="moveCategory('${cat.id}',-1)">&uarr;</button>
+        <button class="btn btn-outline btn-sm" title="Move down" onclick="moveCategory('${cat.id}',1)">&darr;</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCategory('${cat.id}')">Delete</button>
+      </div>
+      <div class="cat-body">
+        <textarea class="cat-intro" placeholder="Optional intro note for this section..." data-cat="${cat.id}">${esc(cat.intro)}</textarea>
+
+        <div class="items-grid">
+        ${cat.items.length ? cat.items.map(item=>`
+          <div class="item-card">
+            <div class="item-top">
+              <input class="item-label" data-cat="${cat.id}" data-item="${item.id}" value="${esc(item.label)}" placeholder="Item">
+              <select class="status-select st-${item.status}" data-cat="${cat.id}" data-item="${item.id}">
+                ${STATUS_OPTS.map(s=>`<option value="${s}" ${s===item.status?'selected':''}>${s==='Pass'?'✅ Pass':s==='Attention'?'⚠️ Attention':s==='Fail'?'❌ Fail':'— N/A'}</option>`).join('')}
+              </select>
+              <button class="item-del" onclick="deleteItem('${cat.id}','${item.id}')">&times;</button>
+            </div>
+            <textarea class="item-note" placeholder="Notes" data-cat="${cat.id}" data-item="${item.id}">${esc(item.note)}</textarea>
+            ${item.photos.length ? `<div class="item-photo-grid">${item.photos.map(p=>
+              mediaThumb(p, `deleteItemPhoto('${cat.id}','${item.id}','${p.id}')`)
+            ).join('')}</div>` : ''}
+            <div class="item-photo-actions">
+              <label class="add-photo-label sm">🖼️ Add photo<input type="file" accept="image/*" multiple onchange="handleItemPhotoFiles('${cat.id}','${item.id}', this.files); this.value='';"></label>
+              <label class="add-photo-label sm">🎬 Add video<input type="file" accept="video/*" onchange="handleItemVideoFiles('${cat.id}','${item.id}', this.files); this.value='';"></label>
+            </div>
+          </div>
+        `).join('') : ''}
+        </div>
+
+        <div class="add-item-row">
+          <input placeholder="Add checklist item..." id="newitem_${cat.id}" onkeydown="if(event.key==='Enter'){addItem('${cat.id}', this.value); this.value='';}">
+          <button class="btn btn-outline btn-sm" onclick="const i=document.getElementById('newitem_${cat.id}'); addItem('${cat.id}', i.value); i.value='';">+ Item</button>
+        </div>
+
+        <div class="photo-grid">
+          ${cat.photos.map(p=> isVideo(p)
+            ? `<div class="photo-thumb media-thumb video" onclick="playMedia('${p.path}')">
+                 ${p.poster ? `<img src="${p.poster}" alt="">` : '<div class="no-poster"></div>'}
+                 <span class="play-badge">&#9654;</span>
+                 <button onclick="event.stopPropagation(); deletePhoto('${cat.id}','${p.id}')">&times;</button>
+                 <input class="caption" placeholder="Caption" value="${esc(p.caption)}" data-cat="${cat.id}" data-photo="${p.id}" onclick="event.stopPropagation();">
+               </div>`
+            : `<div class="photo-thumb">
+                 <img src="${p.dataUrl}">
+                 <button onclick="deletePhoto('${cat.id}','${p.id}')">&times;</button>
+                 <input class="caption" placeholder="Caption" value="${esc(p.caption)}" data-cat="${cat.id}" data-photo="${p.id}">
+               </div>`).join('')}
+        </div>
+        <div class="cat-foot">
+          <label class="add-photo-label">🖼️ Add photos<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${cat.id}', this.files); this.value='';"></label>
+          <label class="add-photo-label">🎬 Add video<input type="file" accept="video/*" onchange="handleCatVideoFiles('${cat.id}', this.files); this.value='';"></label>
+        </div>
+      </div>
+    </div>`).join('');
+
+  wrap.querySelectorAll('input.cat-title').forEach(inp=>{ inp.oninput = e => { findCat(e.target.dataset.cat).title = e.target.value; }; });
+  wrap.querySelectorAll('textarea.cat-intro').forEach(ta=>{ ta.oninput = e => { findCat(e.target.dataset.cat).intro = e.target.value; }; });
+  wrap.querySelectorAll('input.item-label').forEach(inp=>{ inp.oninput = e => { const cat=findCat(e.target.dataset.cat); const it=cat.items.find(i=>i.id===e.target.dataset.item); if(it) it.label = e.target.value; }; });
+  wrap.querySelectorAll('textarea.item-note').forEach(ta=>{ ta.oninput = e => { const cat=findCat(e.target.dataset.cat); const it=cat.items.find(i=>i.id===e.target.dataset.item); if(it) it.note = e.target.value; }; });
+  wrap.querySelectorAll('select.status-select').forEach(sel=>{
+    sel.onchange = e => {
+      const cat=findCat(e.target.dataset.cat); const it=cat.items.find(i=>i.id===e.target.dataset.item);
+      if(it){ it.status = e.target.value; e.target.className = 'status-select st-'+it.status; }
+    };
+  });
+  wrap.querySelectorAll('.photo-thumb .caption').forEach(inp=>{
+    inp.oninput = e => { const cat=findCat(e.target.dataset.cat); const photo=cat.photos.find(p=>p.id===e.target.dataset.photo); if(photo) photo.caption = e.target.value; };
+  });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Leak Detection Reports</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root{
+    --ink:#12313A; --ink-2:#0C232A; --aqua:#1DBFAE; --aqua-soft:#DCF4F0;
+    --paper:#F6F3EC; --paper-2:#FFFFFF; --amber:#DD8933; --text:#1B1F1E;
+    --text-soft:#5B6664; --line:#DAD5C8; --danger:#B84A3E;
+    --pass:#1E8A63; --pass-bg:#E1F3E9; --attn:#B4790F; --attn-bg:#FBEBCF;
+    --fail:#B84A3E; --fail-bg:#F7E4E1; --na:#8A8F8B; --na-bg:#ECEAE3;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;}
+  #topbar{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;gap:10px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand img{height:30px;width:auto;border-radius:4px;}
+  .brand-name{font-weight:600;font-size:17px;}
+  .brand-sub{font-size:10.5px;color:#9FC2C0;font-family:'JetBrains Mono',monospace;letter-spacing:.5px;text-transform:uppercase;}
+  #app{max-width:820px;margin:0 auto;padding:26px 18px 80px;}
+  .btn{border:none;border-radius:8px;padding:11px 17px;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--aqua);color:var(--ink-2);}
+  .btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);}
+  .btn-outline{background:transparent;color:var(--ink);border:1px solid var(--line);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-block{width:100%;justify-content:center;}
+  .card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px;}
+  .card h3{margin:0 0 12px;font-size:13px;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;}
+  .login-wrap{max-width:400px;margin:8vh auto 0;}
+  .login-wrap h1{font-size:24px;margin:0 0 6px;color:var(--ink);}
+  .login-wrap p{margin:0 0 18px;color:var(--text-soft);font-size:14px;line-height:1.5;}
+  input[type=email]{width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);font-size:16px;font-family:'Inter',sans-serif;background:var(--paper-2);margin-bottom:12px;}
+  .note{font-size:12.5px;color:var(--text-soft);margin-top:14px;line-height:1.5;}
+  .msg{padding:11px 13px;border-radius:8px;font-size:13.5px;margin-bottom:14px;line-height:1.45;}
+  .msg.ok{background:var(--aqua-soft);color:#106E63;}
+  .msg.err{background:var(--fail-bg);color:var(--fail);}
+  .report-card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:15px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;}
+  .report-card:hover{border-color:var(--aqua);}
+  .rc-name{font-weight:600;font-size:15px;color:var(--ink);}
+  .rc-no{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--aqua);font-weight:600;}
+  .rc-meta{font-size:12px;color:var(--text-soft);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .status-pill{font-size:10.5px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.4px;padding:3px 8px;border-radius:20px;flex:none;}
+  .status-draft{background:#F1E6D2;color:#8A6416;}
+  .status-sent{background:#DCE7F5;color:#2A5B94;}
+  .status-complete{background:var(--aqua-soft);color:#106E63;}
+  .empty{text-align:center;padding:56px 20px;color:var(--text-soft);}
+  .back-link{display:inline-flex;align-items:center;gap:5px;color:var(--text-soft);font-size:13.5px;cursor:pointer;margin-bottom:16px;font-weight:600;}
+  .back-link:hover{color:var(--ink);}
+  .kv{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .kv:last-child{border-bottom:none;}
+  .kv .k{min-width:130px;font-weight:600;color:var(--text-soft);font-size:12px;text-transform:uppercase;letter-spacing:.3px;padding-top:2px;}
+  .kv .v{flex:1;white-space:pre-wrap;}
+  .item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .item:last-child{border-bottom:none;}
+  .item .lbl{flex:1;min-width:130px;font-size:13.5px;font-weight:600;color:var(--ink);}
+  .badge{font-size:10.5px;font-family:'JetBrains Mono',monospace;font-weight:700;padding:3px 9px;border-radius:20px;flex:none;}
+  .b-Pass{background:var(--pass-bg);color:var(--pass);}
+  .b-Attention{background:var(--attn-bg);color:var(--attn);}
+  .b-Fail{background:var(--fail-bg);color:var(--fail);}
+  .item .note{flex-basis:100%;font-size:12.5px;color:var(--text-soft);white-space:pre-wrap;}
+  .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:10px 0 4px;}
+  .photos img{width:100%;aspect-ratio:1.3;object-fit:cover;border-radius:7px;border:1px solid var(--line);cursor:pointer;}
+  .vid-tile{position:relative;width:100%;aspect-ratio:1.3;border-radius:7px;overflow:hidden;border:1px solid var(--line);cursor:pointer;background:#EFEBDF;}
+  .vid-tile img{width:100%;height:100%;object-fit:cover;display:block;}
+  .vid-tile .no-poster{width:100%;height:100%;background:var(--ink);opacity:.85;}
+  .vid-tile .play-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;text-shadow:0 1px 8px rgba(0,0,0,.65);pointer-events:none;}
+  .vid-tile .dur-badge{position:absolute;bottom:4px;left:5px;background:rgba(12,35,42,.8);color:#fff;font-size:10px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:8px;pointer-events:none;}
+  .sect-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;color:var(--ink);margin:0 0 4px;}
+  .sect-intro{font-size:12.5px;color:var(--text-soft);font-style:italic;margin-bottom:10px;}
+  .disclaimer{font-size:11.5px;color:var(--text-soft);line-height:1.5;white-space:pre-wrap;}
+  .lightbox{position:fixed;inset:0;background:rgba(12,35,42,.9);display:flex;align-items:center;justify-content:center;z-index:80;padding:20px;cursor:zoom-out;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:8px;}
+  .media-close{position:absolute;top:14px;right:16px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+  .media-close:hover{background:rgba(255,255,255,.28);}
+  .spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--aqua);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .config-warn{background:#FBEBCF;color:#8A6416;padding:16px;border-radius:10px;font-size:13.5px;line-height:1.5;margin:20px 0;}
+  .config-warn code{background:rgba(0,0,0,.07);padding:1px 5px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="brand" id="brandBox">
+    <div><div class="brand-name">Leak Detection Reports</div><div class="brand-sub">Client Portal</div></div>
+  </div>
+  <div id="topActions"></div>
+</div>
+<div id="app"></div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your two Supabase values here.
+   Dashboard -> Project Settings -> API
+   The anon key is meant to be public; your data is protected by
+   the row-level security policies in supabase-setup.sql.
+   ============================================================ */
+const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
+
+const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
+const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false };
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtReportNo(n){ return (typeof n === 'number' && n>0) ? '#'+String(n).padStart(4,'0') : ''; }
+function statusPillClass(st){ return st==='Complete' ? 'status-complete' : st==='Sent' ? 'status-sent' : 'status-draft'; }
+function fmtDate(ts){ try{ return new Date(ts).toLocaleDateString(); }catch(e){ return ''; } }
+const MEDIA_BUCKET = 'report-media';
+function isVideo(m){ return m && m.type === 'video'; }
+async function signedMediaUrl(path){
+  try{
+    const { data, error } = await sb.storage.from(MEDIA_BUCKET).createSignedUrl(path, 3600);
+    if(error) throw error;
+    return data.signedUrl;
+  }catch(e){ console.error('signed url failed', e); return null; }
+}
+async function playMedia(path){
+  const url = await signedMediaUrl(path);
+  if(!url){ alert('Sorry, that video could not be loaded.'); return; }
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.innerHTML = `<button class="media-close" aria-label="Close">&times;</button>
+                   <video src="${url}" controls autoplay playsinline style="max-width:100%;max-height:100%;border-radius:8px;background:#000;"></video>`;
+  box.onclick = e => { if(e.target === box) box.remove(); };
+  box.querySelector('.media-close').onclick = () => box.remove();
+  const onEsc = e => { if(e.key === 'Escape'){ box.remove(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+  document.body.appendChild(box);
+}
+function mediaTile(m){
+  if(isVideo(m)){
+    const secs = m.duration ? (m.duration >= 60 ? Math.floor(m.duration/60)+'m'+String(m.duration%60).padStart(2,'0') : m.duration+'s') : '';
+    return `<div class="vid-tile" onclick="playMedia('${m.path}')">
+        ${m.poster ? `<img src="${m.poster}" alt="">` : '<div class="no-poster"></div>'}
+        <span class="play-badge">&#9654;</span>
+        ${secs ? `<span class="dur-badge">${secs}</span>` : ''}
+      </div>`;
+  }
+  return `<img src="${m.dataUrl}" onclick="lightbox('${m.id}')" data-src="${m.dataUrl}">`;
+}
+
+/* ---------------- boot ---------------- */
+async function init(){
+  if(!CONFIGURED){ renderConfigWarning(); return; }
+  const { data } = await sb.auth.getSession();
+  state.session = data.session;
+  state.view = state.session ? 'list' : 'login';
+  sb.auth.onAuthStateChange((_e, session)=>{
+    const wasIn = !!state.session;
+    state.session = session;
+    if(session && !wasIn){ state.view='list'; state.msg=null; loadReports(); }
+    if(!session && wasIn){ state.view='login'; state.reports=[]; render(); }
+  });
+  if(state.session) await loadReports(); else render();
+}
+
+/* ---------------- auth ---------------- */
+async function sendMagicLink(){
+  const email = (document.getElementById('emailInput').value||'').trim();
+  if(!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    state.msg = {type:'err', text:'Please enter a valid email address.'};
+    return render();
+  }
+  state.busy = true; state.msg = null; render();
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options:{ emailRedirectTo: window.location.href.split('#')[0] }
+  });
+  state.busy = false;
+  state.msg = error
+    ? {type:'err', text:'Could not send the link: '+error.message}
+    : {type:'ok',  text:'Check your inbox — we sent a sign-in link to '+email+'. It expires shortly, so open it soon. Check spam if it does not arrive within a minute.'};
+  render();
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  state.session = null; state.reports = []; state.current = null; state.view = 'login';
+  render();
+}
+
+/* ---------------- data ---------------- */
+async function loadReports(){
+  state.busy = true; render();
+  const { data, error } = await sb
+    .from('reports')
+    .select('id, owner_id, report_number, client_name, property_address, report_date, status, updated_at')
+    .order('updated_at', { ascending:false });
+  state.busy = false;
+  if(error){
+    state.msg = {type:'err', text:'Could not load your reports: '+error.message};
+    state.reports = [];
+  } else {
+    state.reports = data || [];
+    state.msg = null;
+  }
+  render();
+}
+
+/* Each report belongs to a different company, so the letterhead has to follow
+   the report rather than being fetched once. A client with reports from two
+   firms would otherwise see whichever row came back first. */
+async function loadBusinessFor(ownerId){
+  if(!ownerId){ state.business = {}; return; }
+  if(state.businessCache[ownerId]){ state.business = state.businessCache[ownerId]; return; }
+  try{
+    const { data } = await sb.from('business_profile').select('data').eq('owner_id', ownerId).maybeSingle();
+    const biz = (data && data.data) || {};
+    state.businessCache[ownerId] = biz;
+    state.business = biz;
+  }catch(e){ state.business = {}; }
+}
+
+async function openReport(id){
+  state.busy = true; render();
+  const { data, error } = await sb.from('reports').select('data, owner_id').eq('id', id).single();
+  state.busy = false;
+  if(error || !data){
+    state.msg = {type:'err', text:'Could not open that report.'};
+    return render();
+  }
+  await loadBusinessFor(data.owner_id);
+  state.current = data.data;
+  state.view = 'report';
+  state.msg = null;
+  render();
+}
+
+function backToList(){ state.current = null; state.view='list'; render(); }
+
+/* ---------------- rendering ---------------- */
+function render(){
+  renderBrand();
+  const app = document.getElementById('app');
+  const acts = document.getElementById('topActions');
+  acts.innerHTML = state.session
+    ? `<button class="btn btn-ghost" onclick="signOut()">Sign out</button>` : '';
+
+  if(state.view==='login')  return renderLogin(app);
+  if(state.busy)            return app.innerHTML = '<div class="spinner"></div>';
+  if(state.view==='report') return renderReport(app);
+  return renderList(app);
+}
+
+function renderBrand(){
+  const b = state.business || {};
+  const box = document.getElementById('brandBox');
+  box.innerHTML = `
+    ${b.logoDataUrl ? `<img src="${b.logoDataUrl}" alt="">` : ''}
+    <div>
+      <div class="brand-name">${esc(b.companyName || 'Your inspection reports')}</div>
+      <div class="brand-sub">Client Portal</div>
+    </div>`;
+}
+
+function renderConfigWarning(){
+  document.getElementById('app').innerHTML = `
+    <div class="config-warn">
+      <b>Not connected yet.</b><br><br>
+      Open this file in a text editor and replace <code>PASTE_YOUR_PROJECT_URL_HERE</code>
+      and <code>PASTE_YOUR_ANON_PUBLIC_KEY_HERE</code> near the top of the
+      <code>&lt;script&gt;</code> block with the values from
+      Supabase → Project Settings → API. Then re-upload the file.
+    </div>`;
+}
+
+function renderLogin(app){
+  const m = state.msg;
+  app.innerHTML = `
+    <div class="login-wrap">
+      <h1>View your report</h1>
+      <p>Enter the email address your report was sent to. We'll email you a secure sign-in link — no password to remember.</p>
+      ${m ? `<div class="msg ${m.type}">${esc(m.text)}</div>` : ''}
+      <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email"
+             onkeydown="if(event.key==='Enter') sendMagicLink();">
+      <button class="btn btn-primary btn-block" onclick="sendMagicLink()" ${state.busy?'disabled':''}>
+        ${state.busy ? 'Sending…' : 'Email me a sign-in link'}
+      </button>
+      <div class="note">
+        Only reports shared with your exact email address will appear.
+        If nothing shows up after signing in, contact us and we'll double-check the address on file.
+      </div>
+    </div>`;
+  const el = document.getElementById('emailInput');
+  if(el) el.focus();
+}
+
+function renderList(app){
+  const m = state.msg;
+  app.innerHTML = `
+    ${m ? `<div class="msg ${m.type}">${esc(m.text)}</div>` : ''}
+    <h1 style="font-size:23px;margin:0 0 4px;color:var(--ink);">Your reports</h1>
+    <p style="margin:0 0 18px;color:var(--text-soft);font-size:13.5px;">
+      Signed in as ${esc(state.session?.user?.email || '')}
+    </p>
+    <div id="items"></div>`;
+  const items = document.getElementById('items');
+  if(!state.reports.length){
+    items.innerHTML = `<div class="empty">
+        <p>No reports have been shared with this email address yet.</p>
+        <p style="font-size:13px;">If you were expecting one, get in touch and we'll check the address we have on file.</p>
+      </div>`;
+    return;
+  }
+  items.innerHTML = state.reports.map(r=>`
+    <div class="report-card" onclick="openReport('${r.id}')">
+      <div>
+        <div class="rc-name">
+          ${fmtReportNo(r.report_number) ? `<span class="rc-no">${fmtReportNo(r.report_number)}</span> ` : ''}
+          ${esc(r.property_address || r.client_name || 'Leak detection report')}
+        </div>
+        <div class="rc-meta">${esc(r.report_date || fmtDate(r.updated_at))}</div>
+      </div>
+      <span class="status-pill ${statusPillClass(r.status)}">${esc(r.status||'')}</span>
+    </div>`).join('');
+}
+
+function renderReport(app){
+  const r = state.current;
+  const cust = (r.customerFields||[]).filter(f=>f.value && String(f.value).trim());
+  const job  = (r.jobFields||[]).filter(f=>f.value && String(f.value).trim());
+  const summ = (r.summaryFields||[]).filter(f=>f.value && String(f.value).trim());
+
+  app.innerHTML = `
+    <div class="back-link" onclick="backToList()">&larr; All reports</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+      <div>
+        <h1 style="font-size:22px;margin:0 0 3px;color:var(--ink);">${esc(r.reportTitle || 'Leak Detection Report')}</h1>
+        <div class="rc-no">${fmtReportNo(r.reportNumber)}</div>
+      </div>
+      <button class="btn btn-primary" onclick="downloadPDF()">Download PDF</button>
+    </div>
+
+    ${cust.length ? `<div class="card"><h3>${esc(r.customerHeading||'Customer Information')}</h3>
+      ${cust.map(f=>`<div class="kv"><div class="k">${esc(f.label)}</div><div class="v">${esc(f.value)}</div></div>`).join('')}
+    </div>` : ''}
+
+    ${job.length ? `<div class="card"><h3>${esc(r.jobHeading||'Job Information')}</h3>
+      ${job.map(f=>`<div class="kv"><div class="k">${esc(f.label)}</div><div class="v">${esc(f.value)}</div></div>`).join('')}
+    </div>` : ''}
+
+    ${summ.length ? `<div class="card"><h3>${esc(r.summaryHeading||'Summary')}</h3>
+      ${summ.map(f=>`<div class="kv"><div class="k">${esc(f.label)}</div><div class="v">${esc(f.value)}</div></div>`).join('')}
+    </div>` : ''}
+
+    ${(r.categories||[]).map((c,i)=>`
+      <div class="card">
+        <div class="sect-title">${i+1}. ${esc(c.title||'')}</div>
+        ${c.intro && c.intro.trim() ? `<div class="sect-intro">${esc(c.intro)}</div>` : ''}
+        ${(c.items||[]).map(it=>`
+          <div class="item">
+            <span class="lbl">${esc(it.label||'')}</span>
+            ${(it.status && it.status!=='N/A' && !/additional findings/i.test(c.title||''))
+              ? `<span class="badge b-${esc(it.status)}">${esc(it.status)}</span>` : ''}
+            ${it.note && it.note.trim() ? `<div class="note">${esc(it.note)}</div>` : ''}
+            ${(it.photos||[]).length ? `<div class="photos">${it.photos.map(p=>mediaTile(p)).join('')}</div>` : ''}
+          </div>`).join('')}
+        ${(c.photos||[]).length ? `<div class="photos">${c.photos.map(p=>mediaTile(p)).join('')}</div>` : ''}
+      </div>`).join('')}
+
+    ${r.disclaimer && r.disclaimer.trim() ? `<div class="card">
+      <h3>${esc(r.disclaimerHeading||'Disclaimer')}</h3>
+      <div class="disclaimer">${esc(r.disclaimer)}</div>
+    </div>` : ''}
+  `;
+}
+
+function lightbox(photoId){
+  const img = document.querySelector(`img[onclick*="${photoId}"]`);
+  if(!img) return;
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.innerHTML = `<img src="${img.dataset.src}">`;
+  box.onclick = ()=> box.remove();
+  document.body.appendChild(box);
+}
+
+/* ---------------- PDF (mirrors the builder's output) ---------------- */
+function loadImageSize(dataUrl){
+  return new Promise(res=>{ const i=new Image(); i.onload=()=>res({w:i.naturalWidth,h:i.naturalHeight}); i.onerror=()=>res({w:400,h:300}); i.src=dataUrl; });
+}
+function cropImageToBox(dataUrl, boxW, boxH){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const tr = boxW/boxH, sr = img.naturalWidth/img.naturalHeight;
+      let sx,sy,sw,sh;
+      if(sr>tr){ sh=img.naturalHeight; sw=sh*tr; sy=0; sx=(img.naturalWidth-sw)/2; }
+      else     { sw=img.naturalWidth;  sh=sw/tr; sx=0; sy=(img.naturalHeight-sh)/2; }
+      const c=document.createElement('canvas');
+      c.width=Math.round(boxW*2); c.height=Math.round(boxH*2);
+      c.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+      resolve(c.toDataURL('image/jpeg',0.82));
+    };
+    img.onerror = ()=>reject(new Error('image'));
+    img.src = dataUrl;
+  });
+}
+async function drawCoverImage(doc, dataUrl, x, y, boxW, boxH){
+  try{ doc.addImage(await cropImageToBox(dataUrl,boxW,boxH), undefined, x, y, boxW, boxH); }catch(e){}
+}
+async function drawMedia(doc, m, x, y, boxW, boxH){
+  if(isVideo(m)){
+    if(m.poster){ await drawCoverImage(doc, m.poster, x, y, boxW, boxH); }
+    else { doc.setFillColor(18,49,58); doc.rect(x, y, boxW, boxH, 'F'); }
+    doc.setFillColor(12,35,42);
+    doc.roundedRect(x+3, y+boxH-15, 46, 12, 3, 3, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(255,255,255);
+    doc.text('> VIDEO', x+8, y+boxH-6);
+  } else {
+    await drawCoverImage(doc, m.dataUrl, x, y, boxW, boxH);
+  }
+}
+const STATUS_RGB = { Pass:[30,138,99], Attention:[180,121,15], Fail:[184,74,62], 'N/A':[138,143,139] };
+function drawStatusBadge(doc, status, x, y){
+  const rgb = STATUS_RGB[status] || STATUS_RGB['N/A'];
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  const w = doc.getTextWidth(status) + 10;
+  doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+  doc.roundedRect(x, y-9, w, 12, 3, 3, 'F');
+  doc.setTextColor(255,255,255);
+  doc.text(status, x+5, y);
+}
+function hexToRgb(hex){
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex||'').trim());
+  return m ? [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)] : [0,65,121];
+}
+function fmtNo(n){ return (typeof n==='number'&&n>0) ? '#'+String(n).padStart(4,'0') : ''; }
+
+async function downloadPDF(){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt',format:'a4'});
+    const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+    const margin = 44, contentW = pageW - margin*2;
+    let y = margin;
+    const biz = state.business || {}, r = state.current;
+    const ensure = h => { if(y+h > pageH-margin){ doc.addPage(); y = margin; } };
+
+    const hc = hexToRgb(biz.headerColor || '#004179');
+    const bandH = 78;
+    doc.setFillColor(hc[0],hc[1],hc[2]); doc.rect(0,0,pageW,bandH,'F');
+    const lum = (0.299*hc[0]+0.587*hc[1]+0.114*hc[2])/255;
+    const fg = lum<0.6 ? [255,255,255] : [24,28,27];
+    const fgSoft = lum<0.6 ? [222,234,232] : [70,80,78];
+    let textX = margin;
+    if(biz.logoDataUrl){
+      try{ const sz = await loadImageSize(biz.logoDataUrl); const h=40, w=h*(sz.w/sz.h);
+           doc.addImage(biz.logoDataUrl, undefined, margin, (bandH-h)/2, w, h); textX = margin+w+14; }catch(e){}
+    }
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(fg[0],fg[1],fg[2]);
+    doc.text(biz.companyName || 'Leak Detection Report', textX, bandH/2 - 2);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(fgSoft[0],fgSoft[1],fgSoft[2]);
+    doc.text([biz.companyPhone, biz.companyEmail].filter(Boolean).join('   |   '), textX, bandH/2 + 13);
+    const rno = fmtNo(r.reportNumber);
+    if(rno){ doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(fg[0],fg[1],fg[2]);
+             doc.text(rno, pageW-margin, bandH/2 - 2, {align:'right'}); }
+    y = bandH + 26;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(18,49,58);
+    doc.text(r.reportTitle || 'Swimming Pool Leak Detection Report', margin, y); y += 18;
+
+    if(r.customerHeading){
+      ensure(14); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58);
+      doc.text(r.customerHeading.toUpperCase(), margin, y); y += 12;
+    }
+    doc.setFontSize(8.5); doc.setTextColor(27,31,30);
+    (r.customerFields||[]).forEach(f=>{
+      const lines = doc.splitTextToSize(String(f.value||'-'), contentW-95);
+      ensure(Math.max(12, lines.length*11));
+      doc.setFont('helvetica','bold'); doc.text(String(f.label||'').toUpperCase()+':', margin, y);
+      doc.setFont('helvetica','normal');
+      lines.forEach((ln,i)=> doc.text(ln, margin+95, y + i*11));
+      y += Math.max(12, lines.length*11);
+    });
+    y += 4;
+
+    if(r.jobHeading){
+      ensure(14); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58);
+      doc.text(r.jobHeading.toUpperCase(), margin, y); y += 12; doc.setTextColor(27,31,30);
+    }
+    doc.setFontSize(7.5);
+    const colW = contentW/2, off = 85, valW = colW - off - 6;
+    const jf = r.jobFields||[];
+    for(let i=0;i<jf.length;i+=2){
+      const pair = [jf[i], jf[i+1]];
+      const wrapped = pair.map(f=> f ? doc.splitTextToSize(String(f.value||'-'), valW) : null);
+      const rowH = Math.max(...wrapped.map(w=> w?w.length:1))*10 + 2;
+      ensure(rowH);
+      pair.forEach((f,c)=>{
+        if(!f) return;
+        const x = margin + c*colW;
+        doc.setFont('helvetica','bold'); doc.text(String(f.label||'').toUpperCase()+':', x, y);
+        doc.setFont('helvetica','normal');
+        wrapped[c].forEach((ln,li)=> doc.text(ln, x+off, y + li*10));
+      });
+      y += rowH;
+    }
+    y += 10;
+
+    const blocks = (r.summaryFields||[]).map(f=>[f.label||'', f.value||'']);
+    if(blocks.some(b=>b[1] && b[1].trim())){
+      ensure(20); doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=18;
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(0,65,121);
+      doc.text(r.summaryHeading || 'Summary', margin, y); y+=16;
+      blocks.forEach(([label,val])=>{
+        if(!val || !val.trim()) return;
+        ensure(14);
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(0,65,121);
+        doc.text(label, margin, y); y+=13;
+        doc.setFont('helvetica','normal'); doc.setTextColor(27,31,30); doc.setFontSize(9.5);
+        doc.splitTextToSize(val, contentW).forEach(ln=>{ ensure(12); doc.text(ln, margin, y); y+=12; });
+        y+=6;
+      });
+    }
+
+    for(let ci=0; ci<(r.categories||[]).length; ci++){
+      const cat = r.categories[ci];
+      ensure(28);
+      doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=18;
+      doc.setFont('helvetica','bold'); doc.setFontSize(12.5); doc.setTextColor(18,49,58);
+      doc.text((ci+1)+'.  '+(cat.title||''), margin, y); y+=15;
+      if(cat.intro && cat.intro.trim()){
+        doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(90,100,98);
+        doc.splitTextToSize(cat.intro, contentW).forEach(ln=>{ ensure(11); doc.text(ln, margin, y); y+=11; });
+        y+=6;
+      }
+      for(const item of (cat.items||[])){
+        ensure(15);
+        doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(27,31,30);
+        doc.text(item.label||'', margin, y);
+        const skip = item.status==='N/A' || /additional findings/i.test(cat.title||'');
+        if(item.status && !skip) drawStatusBadge(doc, item.status, margin+250, y);
+        if(item.note && item.note.trim()){
+          doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,100,98);
+          const nl = doc.splitTextToSize(item.note, contentW-320);
+          doc.text(nl[0]||'', margin+320, y);
+        }
+        y += 15;
+        if((item.photos||[]).length){
+          const cols=4, gap=6, bw=(contentW-gap*(cols-1))/cols, bh=bw*0.78;
+          for(let pi=0; pi<item.photos.length; pi+=cols){
+            ensure(bh+12);
+            for(let c=0;c<cols;c++){
+              const ph = item.photos[pi+c]; if(!ph) continue;
+              await drawMedia(doc, ph, margin+c*(bw+gap), y, bw, bh);
+            }
+            y += bh+12;
+          }
+        }
+      }
+      y += 4;
+      if((cat.photos||[]).length){
+        const cols=3, gap=8, bw=(contentW-gap*(cols-1))/cols, bh=bw*0.72;
+        for(let pi=0; pi<cat.photos.length; pi+=cols){
+          ensure(bh+22);
+          for(let c=0;c<cols;c++){
+            const ph = cat.photos[pi+c]; if(!ph) continue;
+            const x = margin+c*(bw+gap);
+            await drawMedia(doc, ph, x, y, bw, bh);
+            if(ph.caption){ doc.setFontSize(8); doc.setTextColor(90,100,98); doc.text(ph.caption, x, y+bh+10, {maxWidth:bw}); }
+          }
+          y += bh+22;
+        }
+      }
+      y += 6;
+    }
+
+    if(r.disclaimer && r.disclaimer.trim()){
+      ensure(30);
+      doc.setDrawColor(218,213,200); doc.line(margin,y,pageW-margin,y); y+=16;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(18,49,58);
+      doc.text((r.disclaimerHeading||'Disclaimer').toUpperCase(), margin, y); y+=11;
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110,115,112);
+      doc.splitTextToSize(r.disclaimer, contentW).forEach(ln=>{ ensure(9); doc.text(ln, margin, y); y+=9; });
+    }
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(140,145,142);
+    doc.text('© '+new Date().getFullYear()+' '+(biz.companyName||'')+'   ·   '+new Date().toLocaleDateString(), margin, pageH-24);
+
+    const name = ((r.reportTitle||'leak_report').replace(/[^a-z0-9]+/gi,'_'))+'_'+fmtNo(r.reportNumber).replace('#','')+'.pdf';
+    if(window.self !== window.top){
+      window.open(URL.createObjectURL(doc.output('blob')), '_blank');
+    } else {
+      doc.save(name);
+    }
+  }catch(err){
+    console.error(err);
+    alert('Sorry — the PDF could not be generated. Please try again.');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
