@@ -63,6 +63,8 @@
   .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(184,74,62,.4);}
   .btn-danger:hover{background:rgba(184,74,62,.08);}
   .btn-sm{padding:6px 10px;font-size:12px;border-radius:6px;}
+  /* a two-step button waiting for its confirming click */
+  .btn-armed{background:var(--attn-bg);color:var(--attn);border:1px solid var(--attn);}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
 
 
@@ -263,6 +265,12 @@
    ============================================================ */
 const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
+
+/* Where aquapoint-portal.html is hosted. This is the address customers are
+   sent when you email them a report, so it has to be the public URL of the
+   portal page — not a local file path. Leave it blank and the Send to
+   Customer button will tell you to set it. */
+const PORTAL_URL        = '';
 
 const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -530,6 +538,17 @@ const CUSTOMER_ROLES = [
 ];
 const DEFAULT_SUMMARY_FIELDS = ['Key findings','Suspicions / correlations','Recommended actions'];
 const DEFAULT_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the inspection. It does not certify code compliance or guarantee against future leaks. Replace this placeholder with your own reviewed terms in Business Settings.";
+/* The email that goes out with a customer's report. Editable in Business
+   Settings; {{...}} placeholders are filled in per report by fillTemplate(). */
+const DEFAULT_EMAIL_SUBJECT = 'Your leak detection report is ready';
+const DEFAULT_EMAIL_MESSAGE =
+  "Hi {{client}},\n\n" +
+  "Thank you for having us out. Your leak detection report for {{address}} is ready.\n\n" +
+  "The full report is attached as a PDF, and you can also view it online here:\n\n" +
+  "{{link}}\n\n" +
+  "That link is just for you — no password or sign-in needed.\n\n" +
+  "If you have any questions about what we found, give us a call on {{phone}}.\n\n" +
+  "Thanks again,\n{{company}}";
 const DEFAULT_CATEGORY_TEMPLATE = [
   {title:'Job Site', intro:'', items:[]},
   {title:'Visual Leak Inspection', intro:'', items:['Equipment area','Back wash','Around water feature','Structural cracks in pool','Bond beam']},
@@ -557,6 +576,8 @@ function autoGrowTextareas(container){
 async function loadEverything(){
   state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
   if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
+  if(!state.business.emailSubject) state.business.emailSubject = DEFAULT_EMAIL_SUBJECT;
+  if(!state.business.emailMessage) state.business.emailMessage = DEFAULT_EMAIL_MESSAGE;
   state.reportsIndex = (await storeGet('reports-index')) || [];
   await loadTemplates();
   await checkAdmin();
@@ -1531,6 +1552,140 @@ async function emailPDF(){
   }
 }
 
+/* ---------------- emailing the customer their report ----------------
+   Sends the PDF, the message written in Business Settings, and a link that
+   opens the report with no sign-in at all. The sending itself happens in the
+   send-report-email Edge Function; supabase-setup.sql covers the database
+   side and lists the setup this depends on. */
+
+/* Fill the {{...}} placeholders in the Business Settings text. For the HTML
+   version the template and every value are escaped BEFORE substitution, so a
+   client name containing a < cannot break the markup. The link is the one
+   value that is meant to be markup. */
+function fillTemplate(tpl, r, link, forHtml){
+  const vals = {
+    client:  reportClientName(r) || 'there',
+    address: reportAddress(r) || 'your property',
+    company: state.business.companyName || '',
+    phone:   state.business.companyPhone || '',
+    email:   state.business.companyEmail || '',
+    number:  r.reportNumber ? '#'+String(r.reportNumber).padStart(4,'0') : '',
+    link:    link || ''
+  };
+  let body = String(tpl || '');
+  if(forHtml){
+    body = esc(body);
+    Object.keys(vals).forEach(k => { vals[k] = esc(vals[k]); });
+    vals.link = '<a href="'+vals.link+'" style="color:#137F73;font-weight:600;">'+vals.link+'</a>';
+  }
+  return body.replace(/\{\{(\w+)\}\}/g, (m,k) => (k in vals) ? vals[k] : m);
+}
+
+function buildClientEmailHtml(r, link){
+  const biz = state.business || {};
+  const tpl = biz.emailMessage || DEFAULT_EMAIL_MESSAGE;
+  const body = fillTemplate(tpl, r, link, true).replace(/\n/g, '<br>');
+  /* cid:logo pairs with the inline attachment the Edge Function adds. Most
+     mail clients block data: URLs, so the logo has to travel as a real
+     attachment rather than inline in the markup. */
+  const logo = biz.logoDataUrl
+    ? '<img src="cid:logo" alt="'+esc(biz.companyName||'')+'" style="max-height:56px;margin-bottom:18px;">'
+    : '';
+  /* Only add a button of our own when the message has not already placed the
+     link somewhere itself. */
+  const button = /\{\{link\}\}/.test(tpl) ? '' :
+    '<p style="margin:26px 0;"><a href="'+esc(link)+'" style="display:inline-block;background:#1DBFAE;color:#0C232A;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:8px;">View my report</a></p>';
+  const footer = [biz.companyName, biz.companyPhone, biz.companyEmail]
+    .filter(Boolean).map(esc).join(' &middot; ');
+  return '<!doctype html><html><body style="margin:0;padding:0;background:#F6F3EC;">'
+    + '<div style="max-width:600px;margin:0 auto;padding:28px 24px;background:#FFFFFF;'
+    + 'font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1B1F1E;">'
+    + logo
+    + '<div>'+body+'</div>'
+    + button
+    + '<hr style="border:none;border-top:1px solid #DAD5C8;margin:26px 0 14px;">'
+    + '<div style="font-size:12px;color:#5B6664;">'+footer+'</div>'
+    + '</div></body></html>';
+}
+
+/* Two-step button: the first click arms it and names who it is about to
+   write to, the second actually sends. It disarms itself after a few
+   seconds, and again whenever the editor is redrawn — the same
+   self-resetting timeout idea showToast uses. */
+let _sendArmH = null;
+const SEND_BTN_LABEL = '✉️ Email to Customer';
+
+function disarmSendToClient(){
+  clearTimeout(_sendArmH); _sendArmH = null;
+  const b = document.getElementById('sendClientBtn');
+  if(b){ b.className = 'btn btn-outline'; b.disabled = false; b.textContent = SEND_BTN_LABEL; }
+}
+
+async function sendToClient(){
+  const b = document.getElementById('sendClientBtn');
+  const r = state.current;
+  if(!b || !r) return;
+
+  if(!_sendArmH){
+    const to = reportEmails(r);
+    if(!to.length){ showToast('Add the customer’s address in the Email customer field first'); return; }
+    if(!r.sharedWithClient){ showToast('Switch on “Let this client sign in and view this report” first'); return; }
+    if(!PORTAL_URL){ showToast('Set PORTAL_URL near the top of this file to your portal address'); return; }
+    b.className = 'btn btn-armed';
+    b.textContent = to.length > 1 ? 'Send to '+to.length+' recipients?' : 'Send to '+to[0]+'?';
+    _sendArmH = setTimeout(disarmSendToClient, 5000);
+    return;
+  }
+
+  clearTimeout(_sendArmH); _sendArmH = null;
+  b.disabled = true; b.className = 'btn btn-outline'; b.textContent = 'Sending…';
+  try{
+    const sent = await doSendToClient();
+    showToast(sent > 1 ? 'Email sent to '+sent+' recipients' : 'Email sent');
+  }catch(err){
+    console.error('Send to customer failed', err);
+    showToast('Could not send: '+((err && err.message) || 'please try again'));
+  }finally{
+    disarmSendToClient();
+  }
+}
+
+async function doSendToClient(){
+  const { doc, filename, r } = await buildPDF();   // saves the report first
+  /* The access token lives in its own column rather than in the report body,
+     so read it back after the save instead of from state. A brand new report
+     gets one from the database the moment its row is created. */
+  const { data: row, error } = await sb.from('reports').select('access_token').eq('id', r.id).single();
+  if(error || !row || !row.access_token) throw new Error('this report has no access link yet — run supabase-setup.sql');
+  const link = PORTAL_URL.split('#')[0] + '#t=' + row.access_token;
+
+  /* jsPDF hands back  data:application/pdf;filename=...;base64,....  — the
+     prefix carries extra parameters, so find the marker rather than assuming
+     where the payload starts. */
+  const uri = doc.output('datauristring');
+  const pdfBase64 = uri.slice(uri.indexOf('base64,') + 7);
+
+  const { data, error: fnErr } = await sb.functions.invoke('send-report-email', {
+    body: {
+      reportId:  r.id,
+      subject:   fillTemplate(state.business.emailSubject || DEFAULT_EMAIL_SUBJECT, r, link, false),
+      html:      buildClientEmailHtml(r, link),
+      pdfBase64: pdfBase64,
+      filename:  filename,
+      portalUrl: PORTAL_URL
+    }
+  });
+  if(fnErr){
+    /* invoke() reports any non-2xx as the same generic message, so dig the
+       real one out of the response the function sent back. */
+    let msg = fnErr.message || 'the email service did not respond';
+    try{ const j = await fnErr.context.json(); if(j && j.error) msg = j.error; }catch(e){}
+    throw new Error(msg);
+  }
+  if(data && data.error) throw new Error(data.error);
+  return (data && data.sent) || 1;
+}
+
 
 
 /* ---------------- preset library (multiple named presets) ---------------- */
@@ -2497,6 +2652,23 @@ function renderSettings(){
         <div class="subnote" style="margin:0;">Disclaimer text now lives with each preset, so different report types can carry different terms. Edit it under <b>Preset Sections</b>.</div>
       </div>
     </div>
+    <div class="card">
+      <h3>Customer email</h3>
+      <div class="subnote">Sent by the <b>&#9993;&#65039; Email to Customer</b> button on a report, together with the PDF and your logo. The link inside opens the report straight away, with nothing to sign in to &mdash; so anyone the customer forwards it to can open it as well. Unticking a report's sharing checkbox shuts off every link already sent for it.</div>
+      <div class="field" style="margin-top:12px;">
+        <label>Subject</label>
+        <input id="s_emailsubject" value="${esc(b.emailSubject || DEFAULT_EMAIL_SUBJECT)}">
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Message</label>
+        <textarea id="s_emailmessage" style="width:100%;min-height:170px;padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:12.5px;font-family:'Inter',sans-serif;">${esc(b.emailMessage || DEFAULT_EMAIL_MESSAGE)}</textarea>
+        <div class="subnote" style="margin-top:6px;">
+          Placeholders you can use: <b>{{client}}</b>, <b>{{address}}</b>, <b>{{company}}</b>,
+          <b>{{phone}}</b>, <b>{{email}}</b>, <b>{{number}}</b> and <b>{{link}}</b>.
+          Leave <b>{{link}}</b> out and a &ldquo;View my report&rdquo; button is added at the end instead.
+        </div>
+      </div>
+    </div>
     <div class="sticky-actions"><button class="btn btn-primary" onclick="collectSettingsAndSave()">Save Settings</button></div>
   `;
   autoGrowTextareas(app);
@@ -2506,6 +2678,8 @@ function collectSettingsAndSave(){
   state.business.companyName = document.getElementById('s_name').value;
   state.business.companyPhone = document.getElementById('s_phone').value;
   state.business.companyEmail = document.getElementById('s_email').value;
+  state.business.emailSubject = document.getElementById('s_emailsubject').value;
+  state.business.emailMessage = document.getElementById('s_emailmessage').value;
   const hex = document.getElementById('s_headercolor').value;
   state.business.headerColor = /^#[0-9a-f]{6}$/i.test(hex) ? hex : '#004179';
   saveBusiness();
@@ -2519,6 +2693,7 @@ function wireHeaderColor(){
 }
 
 function renderEditor(){
+  disarmSendToClient();   // the toolbar is about to be rebuilt under it
   const app = document.getElementById('mainPanel'); const r = state.current;
   app.innerHTML = `
     <div class="editor-header">
@@ -2577,6 +2752,7 @@ function renderEditor(){
       <button class="btn btn-outline" onclick="downloadReportBackup(false)">Download Backup</button>
       <button class="btn btn-outline" onclick="saveCurrentReport(false)">Save</button>
       <button class="btn btn-outline" onclick="emailPDF()">📧 Email PDF</button>
+      <button class="btn btn-outline" id="sendClientBtn" onclick="sendToClient()">✉️ Email to Customer</button>
       <button class="btn btn-primary" onclick="exportPDF()">Export PDF</button>
     </div>
   `;
@@ -2652,7 +2828,7 @@ function updateShareHint(){
   const emails = reportEmails(state.current);
   if(!state.current.sharedWithClient){
     el.className = 'share-hint';
-    el.textContent = 'Off — only you can see this report.';
+    el.textContent = 'Off — only you can see this report, and any link already emailed for it has stopped working.';
     return;
   }
   if(!emails.length){
@@ -2661,9 +2837,8 @@ function updateShareHint(){
     return;
   }
   el.className = 'share-hint';
-  el.textContent = emails.length > 1
-    ? 'Visible to ' + emails.join(', ') + ' — only the first address (' + emails[0] + ') can sign in to the portal; the rest can still receive the emailed PDF.'
-    : 'Visible to ' + emails[0] + ' after they sign in to the portal.';
+  el.textContent = 'Email to Customer will send this report to ' + emails.join(', ')
+    + ' with a link that opens it straight away. Untick this box to shut that link off again.';
 }
 
 function renderJobFields(){

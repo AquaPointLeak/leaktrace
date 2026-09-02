@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- A report link carries an access token. Sending no referrer keeps it from
+     reaching the font and script CDNs this page loads from. -->
+<meta name="referrer" content="no-referrer">
 <title>Your Leak Detection Reports</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -107,7 +110,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false };
+let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false, token:null };
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtReportNo(n){ return (typeof n === 'number' && n>0) ? '#'+String(n).padStart(4,'0') : ''; }
@@ -122,8 +125,21 @@ async function signedMediaUrl(path){
     return data.signedUrl;
   }catch(e){ console.error('signed url failed', e); return null; }
 }
+/* A visitor on an emailed link has no account, so they cannot sign a storage
+   URL themselves — the report-media-url function does it for them once it has
+   checked the file really belongs to their report. */
+async function tokenMediaUrl(path){
+  try{
+    const { data, error } = await sb.functions.invoke('report-media-url', {
+      body: { token: state.token, path }
+    });
+    if(error || !data || !data.url) throw error || new Error('no url');
+    return data.url;
+  }catch(e){ console.error('token media url failed', e); return null; }
+}
+
 async function playMedia(path){
-  const url = await signedMediaUrl(path);
+  const url = state.token ? await tokenMediaUrl(path) : await signedMediaUrl(path);
   if(!url){ alert('Sorry, that video could not be loaded.'); return; }
   const box = document.createElement('div');
   box.className = 'lightbox';
@@ -148,8 +164,29 @@ function mediaTile(m){
 }
 
 /* ---------------- boot ---------------- */
+
+/* A report emailed to a customer carries its access token in the URL
+   fragment. A fragment is never sent to a server, so the token stays out of
+   web server logs and out of Referer headers — unlike a ?query would. We
+   accept ?t= as well in case a mail client mangles the link, then wipe it
+   from the address bar either way so it is not left sitting in a screenshot
+   or copied out of the URL bar by accident. */
+function readAccessToken(){
+  let tok = '';
+  const hash = (location.hash || '').replace(/^#/, '');
+  const fromHash = new URLSearchParams(hash).get('t');
+  const fromQuery = new URLSearchParams(location.search || '').get('t');
+  tok = (fromHash || fromQuery || '').trim();
+  if(tok) history.replaceState(null, '', location.pathname);
+  return tok;
+}
+
 async function init(){
   if(!CONFIGURED){ renderConfigWarning(); return; }
+
+  const tok = readAccessToken();
+  if(tok){ state.token = tok; return openReportByToken(tok); }
+
   const { data } = await sb.auth.getSession();
   state.session = data.session;
   state.view = state.session ? 'list' : 'login';
@@ -217,6 +254,32 @@ async function loadBusinessFor(ownerId){
     state.businessCache[ownerId] = biz;
     state.business = biz;
   }catch(e){ state.business = {}; }
+}
+
+/* Opening a report from an emailed link — no account, no sign-in. The token
+   is checked by report_by_token() in the database, which also hands back the
+   letterhead so a signed-out visitor still sees the right branding. */
+async function openReportByToken(tok){
+  /* Anything but 'login' here, or render() would flash the sign-in form
+     while the lookup is still in flight. */
+  state.view = 'loading';
+  state.busy = true; render();
+  const { data, error } = await sb.rpc('report_by_token', { tok });
+  state.busy = false;
+  /* One message whatever went wrong. Saying which part failed would let
+     someone test guessed tokens against this page. */
+  if(error || !data || !data.report){
+    state.token = null;
+    state.view = 'login';
+    state.msg = {type:'err', text:'This report link is no longer valid. Ask your inspector to send you a new one.'};
+    return render();
+  }
+  state.business = data.business || {};
+  state.current  = data.report;
+  state.reportId = data.report_id;
+  state.view     = 'report';
+  state.msg      = null;
+  render();
 }
 
 async function openReport(id){
@@ -330,7 +393,7 @@ function renderReport(app){
   const summ = (r.summaryFields||[]).filter(f=>f.value && String(f.value).trim());
 
   app.innerHTML = `
-    <div class="back-link" onclick="backToList()">&larr; All reports</div>
+    ${state.token ? '' : `<div class="back-link" onclick="backToList()">&larr; All reports</div>`}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
       <div>
         <h1 style="font-size:22px;margin:0 0 3px;color:var(--ink);">${esc(r.reportTitle || 'Leak Detection Report')}</h1>
