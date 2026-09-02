@@ -318,7 +318,9 @@ async function storeSet(key,value){
     if(key === 'reports-index') return {ok:true};   // derived from the reports table
     if(key.indexOf('report:') === 0){
       const r = value;
-      const email = (reportEmail(r)||'').trim().toLowerCase();
+      // Portal sign-in matches this column against a single auth email, so store just the
+      // primary (first) address here even though the report can hold several — see reportEmails().
+      const email = (reportEmails(r)[0] || '').toLowerCase();
       const { error } = await sb.from('reports').upsert({
         id: r.id,
         owner_id: currentUserId(),
@@ -423,6 +425,18 @@ function roleValue(r, role){
 function reportClientName(r){ return roleValue(r,'name'); }
 function reportAddress(r){ return roleValue(r,'address'); }
 function reportEmail(r){ return roleValue(r,'email'); }
+/* The Email field can hold more than one address, separated by commas or semicolons. */
+function reportEmails(r){
+  const raw = roleValue(r,'email') || '';
+  const seen = new Set();
+  return raw.split(/[,;]+/).map(e=>e.trim()).filter(e=>{
+    if(!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return false;
+    const key = e.toLowerCase();
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /* Storage-independent backup: download/restore a report as a .json file on-device. */
 function downloadJSON(filename, data){
@@ -1490,7 +1504,7 @@ async function emailPDF(){
       }
     } else {
       savePDF(doc, filename);
-      const to = encodeURIComponent(reportEmail(r) || '');
+      const to = encodeURIComponent(reportEmails(r).join(','));
       const subject = encodeURIComponent('Your Leak Detection Report is Ready');
       const body = encodeURIComponent('Hi '+(reportClientName(r)||'')+'!\n\nYour leak report is ready — please see the attached PDF (attach the file from the previous step).\n\nIf you have any questions or concerns, please reach out to '+(state.business.companyPhone||'')+'.\n\nThank you!');
       showToast('Opening email — attach the PDF from the previous step');
@@ -2539,7 +2553,7 @@ function renderCustomerFields(){
   wrap.innerHTML = state.current.customerFields.map(f=>`
     <div class="kv-row">
       <textarea class="kv-label" rows="1" data-id="${f.id}" data-part="label" placeholder="Field name">${esc(f.label)}</textarea>
-      <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value">${esc(f.value)}</textarea>
+      <textarea class="kv-value" rows="1" data-id="${f.id}" data-part="value" placeholder="${f.role==='email' ? 'name@example.com, name2@example.com' : ''}">${esc(f.value)}</textarea>
       <button class="item-del" title="Move up" onclick="moveCustomerField('${f.id}',-1)">&uarr;</button>
       <button class="item-del" title="Move down" onclick="moveCustomerField('${f.id}',1)">&darr;</button>
       <button class="item-del" onclick="deleteCustomerField('${f.id}')">&times;</button>
@@ -2581,19 +2595,21 @@ function renderSummaryFields(){
 function updateShareHint(){
   const el = document.getElementById('shareHint');
   if(!el || !state.current) return;
-  const email = (reportEmail(state.current)||'').trim();
+  const emails = reportEmails(state.current);
   if(!state.current.sharedWithClient){
     el.className = 'share-hint';
     el.textContent = 'Off — only you can see this report.';
     return;
   }
-  if(!email){
+  if(!emails.length){
     el.className = 'share-hint warn';
     el.textContent = 'No client email set. Fill in the field tagged with the Email role above, or the client will not be able to reach this report.';
     return;
   }
   el.className = 'share-hint';
-  el.textContent = 'Visible to ' + email + ' after they sign in to the portal.';
+  el.textContent = emails.length > 1
+    ? 'Visible to ' + emails.join(', ') + ' — only the first address (' + emails[0] + ') can sign in to the portal; the rest can still receive the emailed PDF.'
+    : 'Visible to ' + emails[0] + ' after they sign in to the portal.';
 }
 
 function renderJobFields(){
