@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LeakTrace — inspection reports for leak detection pros</title>
 <meta name="description" content="Write up a leak detection inspection on your phone, attach photos and video, and send the customer a branded PDF and a portal link. Built for pool leak detection companies.">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase client, pinned so an upstream release can never change this page under us.
+     The second line is a fallback CDN: if the first request is blocked - an ad or privacy
+     blocker, a DNS or corporate network filter, a CDN outage - the library would be
+     missing and every script below it would die, leaving a blank page. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"><\/script>');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -407,7 +412,11 @@
 const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* Nothing on this page needs Supabase to work — the links are plain anchors and the
+   footer is static. Only the "already signed in" banner does, so a missing library
+   leaves sb null instead of throwing and taking the rest of this script with it. */
+const LIB_READY = typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function';
+const sb = LIB_READY ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 document.getElementById('yr').textContent = '© ' + new Date().getFullYear();
@@ -434,6 +443,7 @@ document.querySelectorAll('a[href$=".html"]').forEach(a=>{
 });
 
 async function showSession(){
+  if(!sb) return;
   try{
     const { data } = await sb.auth.getSession();
     const s = data.session;
@@ -451,7 +461,7 @@ async function showSession(){
 }
 
 async function signOut(){
-  await sb.auth.signOut();
+  if(sb) await sb.auth.signOut();
   window.location.reload();
 }
 

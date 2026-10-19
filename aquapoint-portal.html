@@ -7,7 +7,12 @@
      reaching the font and script CDNs this page loads from. -->
 <meta name="referrer" content="no-referrer">
 <title>Your Leak Detection Reports</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase client, pinned so an upstream release can never change this page under us.
+     The second line is a fallback CDN: if the first request is blocked - an ad or privacy
+     blocker, a DNS or corporate network filter, a CDN outage - the library would be
+     missing and every script below it would die, leaving a blank page. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"><\/script>');</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -108,7 +113,11 @@ const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
 
 const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
-const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+/* The client library is fetched from a CDN, so it can be absent entirely. Reaching
+   straight for supabase.createClient used to throw here and take the whole script
+   with it, which showed up as a page that loaded but had nothing on it. */
+const LIB_READY = typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function';
+const sb = (CONFIGURED && LIB_READY) ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false, token:null };
 
@@ -182,6 +191,7 @@ function readAccessToken(){
 }
 
 async function init(){
+  if(!LIB_READY){ renderLibWarning(); return; }
   if(!CONFIGURED){ renderConfigWarning(); return; }
 
   const tok = readAccessToken();
@@ -321,6 +331,22 @@ function renderBrand(){
     <div>
       <div class="brand-name">${esc(b.companyName || 'Your inspection reports')}</div>
       <div class="brand-sub">Client Portal</div>
+    </div>`;
+}
+
+function renderLibWarning(){
+  document.getElementById('app').innerHTML = `
+    <div class="config-warn">
+      <b>Could not load the page.</b><br><br>
+      A file this page needs did not download, so your report could not be opened.
+      That is nearly always the connection rather than the page itself: an ad or
+      privacy blocker, a network that filters outside scripts, or a signal that
+      dropped mid-load.<br><br>
+      Try reloading, switch the blocker off for this site, or come back on a
+      different connection.
+      <div style="margin-top:14px;">
+        <button onclick="location.reload()" style="font:inherit;font-weight:600;padding:9px 16px;border-radius:7px;border:1px solid #8A6416;background:transparent;color:#8A6416;cursor:pointer;">Reload</button>
+      </div>
     </div>`;
 }
 
