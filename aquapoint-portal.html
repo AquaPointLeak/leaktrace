@@ -3,6 +3,67 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* Installed before anything else so it is always listening. These pages draw their
+   whole interface from script, so until now any error anywhere left a blank page
+   with nothing to go on. This puts the reason on the screen instead, and gives the
+   person a line they can read back to us. */
+(function(){
+  var shown = false, failedScript = '';
+  function show(detail){
+    if(shown) return;
+    shown = true;
+    try{
+      var d = document.createElement('div');
+      d.setAttribute('style','position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;overflow:auto;'
+        + 'background:#FBEBCF;color:#6B4E12;padding:24px;'
+        + "font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;");
+      var box = document.createElement('div');
+      box.setAttribute('style','max-width:560px;margin:8vh auto;');
+      var h = document.createElement('b');
+      h.setAttribute('style','font-size:16px;');
+      h.textContent = 'This page could not start.';
+      var p1 = document.createElement('p');
+      p1.textContent = 'Something it needs failed to load or run, so nothing was drawn. '
+        + 'That is usually the connection rather than the app: an ad or privacy blocker, '
+        + 'a network that filters outside scripts, or a signal that dropped mid-load.';
+      var p2 = document.createElement('p');
+      var b = document.createElement('button');
+      b.textContent = 'Reload';
+      b.setAttribute('style','font:inherit;font-weight:600;padding:9px 16px;border-radius:7px;'
+        + 'border:1px solid #6B4E12;background:transparent;color:#6B4E12;cursor:pointer;');
+      b.onclick = function(){ location.reload(); };
+      p2.appendChild(b);
+      var p3 = document.createElement('p');
+      p3.setAttribute('style','margin-top:18px;font-size:12px;');
+      p3.textContent = 'If reloading does not help, this is what went wrong:';
+      var c = document.createElement('code');
+      c.setAttribute('style','display:block;white-space:pre-wrap;word-break:break-word;'
+        + 'background:rgba(0,0,0,.07);padding:10px;border-radius:6px;font-size:12px;');
+      c.textContent = detail + (failedScript ? '\nalso failed to load: ' + failedScript : '');
+      box.appendChild(h); box.appendChild(p1); box.appendChild(p2);
+      box.appendChild(p3); box.appendChild(c);
+      d.appendChild(box);
+      (document.body || document.documentElement).appendChild(d);
+    }catch(e){ /* nothing left to try */ }
+  }
+  window.addEventListener('error', function(e){
+    /* A script that 404s or is blocked fires here with the tag as the target. On its
+       own that is survivable - the fallback CDN may still answer - so only remember
+       it, and let a real exception be what surfaces the panel. */
+    if(e && e.target && e.target !== window && e.target.tagName === 'SCRIPT'){
+      failedScript = e.target.src || 'a script';
+      return;
+    }
+    show((e && e.message ? e.message : 'script error')
+         + (e && e.filename ? '  (' + String(e.filename).split('/').pop() + ':' + e.lineno + ')' : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason;
+    show('unhandled: ' + ((r && (r.message || r)) || 'rejection'));
+  });
+})();
+</script>
 <!-- A report link carries an access token. Sending no referrer keeps it from
      reaching the font and script CDNs this page loads from. -->
 <meta name="referrer" content="no-referrer">
@@ -94,6 +155,13 @@
 </style>
 </head>
 <body>
+<noscript>
+  <div style="max-width:560px;margin:10vh auto;padding:20px;background:#FBEBCF;color:#6B4E12;border-radius:10px;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <b>JavaScript is switched off.</b><br><br>
+    This page is built in the browser, so it needs JavaScript enabled to show anything.
+  </div>
+</noscript>
+
 <div id="topbar">
   <div class="brand" id="brandBox">
     <div><div class="brand-name">Leak Detection Reports</div><div class="brand-sub">Client Portal</div></div>
