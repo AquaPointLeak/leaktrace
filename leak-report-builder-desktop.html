@@ -664,9 +664,20 @@ async function loadEverything(){
   }
 }
 
+/* "Start free" on the marketing site means create an account, so it links here
+   with ?signup=1. Without it every one of those buttons landed on the sign-in
+   form and a new customer had to work out that the toggle underneath was the
+   way in. A session always wins: someone already signed in goes to their
+   reports, not to a sign-up form. */
+function wantsSignup(){
+  try{ return new URLSearchParams(location.search).get('signup') === '1'; }
+  catch(e){ return false; }
+}
+
 async function init(){
   if(!LIB_READY){ renderLibWarning(); return; }
   if(!CONFIGURED){ renderConfigWarning(); return; }
+  if(wantsSignup()) state.authMode = 'signup';
   const { data } = await sb.auth.getSession();
   state.session = data.session;
 

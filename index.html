@@ -181,7 +181,7 @@
       <a href="#features" class="hide-sm">Features</a>
       <a href="#pricing" class="hide-sm">Pricing</a>
       <a href="leak-report-builder-mobile.html">Sign in</a>
-      <a href="leak-report-builder-mobile.html" class="solid">Start free</a>
+      <a href="leak-report-builder-mobile.html?signup=1" class="solid">Start free</a>
     </div>
   </div>
 </nav>
@@ -203,7 +203,7 @@
     <h1>Finish the report <em>before you leave the driveway.</em></h1>
     <p class="lede">Work through your checklist on your phone, attach photos and video as you go, and hand the customer a branded PDF and a private portal link — without touching a Word template again.</p>
     <div class="hero-cta">
-      <a class="btn btn-go" href="leak-report-builder-mobile.html"><span>Start free</span><span class="arrow">→</span></a>
+      <a class="btn btn-go" href="leak-report-builder-mobile.html?signup=1"><span>Start free</span><span class="arrow">→</span></a>
       <a class="btn btn-ghost" href="#how">See how it works</a>
     </div>
     <div class="hero-note">No card required · Set up in about 10 minutes</div>
@@ -321,7 +321,7 @@
           <li>Photos and video</li>
           <li>Your branding on PDFs</li>
         </ul>
-        <a class="btn btn-line" href="leak-report-builder-mobile.html">Start free</a>
+        <a class="btn btn-line" href="leak-report-builder-mobile.html?signup=1">Start free</a>
       </div>
 
       <div class="plan pick">
@@ -336,7 +336,7 @@
           <li>Publish to the template library</li>
           <li>Priority support</li>
         </ul>
-        <a class="btn btn-navy" href="leak-report-builder-mobile.html"><span>Start free</span><span class="arrow">→</span></a>
+        <a class="btn btn-navy" href="leak-report-builder-mobile.html?signup=1"><span>Start free</span><span class="arrow">→</span></a>
       </div>
 
       <div class="plan">
@@ -391,7 +391,7 @@
     <div class="closer">
       <h2>Try it on your next job</h2>
       <p>Set up your letterhead and first template in about ten minutes. Free while we're in beta.</p>
-      <a class="btn btn-go" href="leak-report-builder-mobile.html"><span>Create your account</span><span class="arrow">→</span></a>
+      <a class="btn btn-go" href="leak-report-builder-mobile.html?signup=1"><span>Create your account</span><span class="arrow">→</span></a>
       <div id="sessionBox"></div>
     </div>
   </div>
@@ -436,9 +436,12 @@ function forwardAuthHash(){
   return true;
 }
 
-document.querySelectorAll('a[href$=".html"]').forEach(a=>{
+/* Matches on *=".html" rather than $=, since the sign-up buttons now carry a
+   query string. Only the page is remembered: a forwarded magic link has no use
+   for ?signup=1. */
+document.querySelectorAll('a[href*=".html"]').forEach(a=>{
   a.addEventListener('click', ()=>{
-    try{ sessionStorage.setItem('lastApp', a.getAttribute('href')); }catch(e){}
+    try{ sessionStorage.setItem('lastApp', a.getAttribute('href').split('?')[0]); }catch(e){}
   });
 });
 
