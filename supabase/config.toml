@@ -1,0 +1,13 @@
+project_id = "zakdszzeqapdpxdyvkvd"
+
+# Called by a signed-in staff member from the report builder. The gateway
+# checks the JWT is well formed; the function itself checks it belongs to a
+# real user who owns the report being sent.
+[functions.send-report-email]
+verify_jwt = true
+
+# Called by a customer who has a link but no account, so there is no JWT to
+# verify. The function authorises the request against the report's access
+# token instead.
+[functions.report-media-url]
+verify_jwt = false

@@ -3,8 +3,77 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* Installed before anything else so it is always listening. These pages draw their
+   whole interface from script, so until now any error anywhere left a blank page
+   with nothing to go on. This puts the reason on the screen instead, and gives the
+   person a line they can read back to us. */
+(function(){
+  var shown = false, failedScript = '';
+  function show(detail){
+    if(shown) return;
+    shown = true;
+    try{
+      var d = document.createElement('div');
+      d.setAttribute('style','position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;overflow:auto;'
+        + 'background:#FBEBCF;color:#6B4E12;padding:24px;'
+        + "font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;");
+      var box = document.createElement('div');
+      box.setAttribute('style','max-width:560px;margin:8vh auto;');
+      var h = document.createElement('b');
+      h.setAttribute('style','font-size:16px;');
+      h.textContent = 'This page could not start.';
+      var p1 = document.createElement('p');
+      p1.textContent = 'Something it needs failed to load or run, so nothing was drawn. '
+        + 'That is usually the connection rather than the app: an ad or privacy blocker, '
+        + 'a network that filters outside scripts, or a signal that dropped mid-load.';
+      var p2 = document.createElement('p');
+      var b = document.createElement('button');
+      b.textContent = 'Reload';
+      b.setAttribute('style','font:inherit;font-weight:600;padding:9px 16px;border-radius:7px;'
+        + 'border:1px solid #6B4E12;background:transparent;color:#6B4E12;cursor:pointer;');
+      b.onclick = function(){ location.reload(); };
+      p2.appendChild(b);
+      var p3 = document.createElement('p');
+      p3.setAttribute('style','margin-top:18px;font-size:12px;');
+      p3.textContent = 'If reloading does not help, this is what went wrong:';
+      var c = document.createElement('code');
+      c.setAttribute('style','display:block;white-space:pre-wrap;word-break:break-word;'
+        + 'background:rgba(0,0,0,.07);padding:10px;border-radius:6px;font-size:12px;');
+      c.textContent = detail + (failedScript ? '\nalso failed to load: ' + failedScript : '');
+      box.appendChild(h); box.appendChild(p1); box.appendChild(p2);
+      box.appendChild(p3); box.appendChild(c);
+      d.appendChild(box);
+      (document.body || document.documentElement).appendChild(d);
+    }catch(e){ /* nothing left to try */ }
+  }
+  window.addEventListener('error', function(e){
+    /* A script that 404s or is blocked fires here with the tag as the target. On its
+       own that is survivable - the fallback CDN may still answer - so only remember
+       it, and let a real exception be what surfaces the panel. */
+    if(e && e.target && e.target !== window && e.target.tagName === 'SCRIPT'){
+      failedScript = e.target.src || 'a script';
+      return;
+    }
+    show((e && e.message ? e.message : 'script error')
+         + (e && e.filename ? '  (' + String(e.filename).split('/').pop() + ':' + e.lineno + ')' : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason;
+    show('unhandled: ' + ((r && (r.message || r)) || 'rejection'));
+  });
+})();
+</script>
+<!-- A report link carries an access token. Sending no referrer keeps it from
+     reaching the font and script CDNs this page loads from. -->
+<meta name="referrer" content="no-referrer">
 <title>Your Leak Detection Reports</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase client, pinned so an upstream release can never change this page under us.
+     The second line is a fallback CDN: if the first request is blocked - an ad or privacy
+     blocker, a DNS or corporate network filter, a CDN outage - the library would be
+     missing and every script below it would die, leaving a blank page. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"><\/script>');</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -86,6 +155,13 @@
 </style>
 </head>
 <body>
+<noscript>
+  <div style="max-width:560px;margin:10vh auto;padding:20px;background:#FBEBCF;color:#6B4E12;border-radius:10px;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <b>JavaScript is switched off.</b><br><br>
+    This page is built in the browser, so it needs JavaScript enabled to show anything.
+  </div>
+</noscript>
+
 <div id="topbar">
   <div class="brand" id="brandBox">
     <div><div class="brand-name">Leak Detection Reports</div><div class="brand-sub">Client Portal</div></div>
@@ -105,9 +181,13 @@ const SUPABASE_URL      = 'https://zakdszzeqapdpxdyvkvd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2RzenplcWFwZHB4ZHl2a3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyOTA5MDUsImV4cCI6MjEwMDg2NjkwNX0.Ym4nZGXPTLoFhnu2QAHSqGK-NZuRaa_LqxrU9FRxrQs';
 
 const CONFIGURED = !SUPABASE_URL.startsWith('PASTE_') && !SUPABASE_ANON_KEY.startsWith('PASTE_');
-const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+/* The client library is fetched from a CDN, so it can be absent entirely. Reaching
+   straight for supabase.createClient used to throw here and take the whole script
+   with it, which showed up as a page that loaded but had nothing on it. */
+const LIB_READY = typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function';
+const sb = (CONFIGURED && LIB_READY) ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false };
+let state = { view:'login', session:null, reports:[], current:null, business:{}, businessCache:{}, msg:null, busy:false, token:null };
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtReportNo(n){ return (typeof n === 'number' && n>0) ? '#'+String(n).padStart(4,'0') : ''; }
@@ -122,8 +202,21 @@ async function signedMediaUrl(path){
     return data.signedUrl;
   }catch(e){ console.error('signed url failed', e); return null; }
 }
+/* A visitor on an emailed link has no account, so they cannot sign a storage
+   URL themselves — the report-media-url function does it for them once it has
+   checked the file really belongs to their report. */
+async function tokenMediaUrl(path){
+  try{
+    const { data, error } = await sb.functions.invoke('report-media-url', {
+      body: { token: state.token, path }
+    });
+    if(error || !data || !data.url) throw error || new Error('no url');
+    return data.url;
+  }catch(e){ console.error('token media url failed', e); return null; }
+}
+
 async function playMedia(path){
-  const url = await signedMediaUrl(path);
+  const url = state.token ? await tokenMediaUrl(path) : await signedMediaUrl(path);
   if(!url){ alert('Sorry, that video could not be loaded.'); return; }
   const box = document.createElement('div');
   box.className = 'lightbox';
@@ -148,8 +241,30 @@ function mediaTile(m){
 }
 
 /* ---------------- boot ---------------- */
+
+/* A report emailed to a customer carries its access token in the URL
+   fragment. A fragment is never sent to a server, so the token stays out of
+   web server logs and out of Referer headers — unlike a ?query would. We
+   accept ?t= as well in case a mail client mangles the link, then wipe it
+   from the address bar either way so it is not left sitting in a screenshot
+   or copied out of the URL bar by accident. */
+function readAccessToken(){
+  let tok = '';
+  const hash = (location.hash || '').replace(/^#/, '');
+  const fromHash = new URLSearchParams(hash).get('t');
+  const fromQuery = new URLSearchParams(location.search || '').get('t');
+  tok = (fromHash || fromQuery || '').trim();
+  if(tok) history.replaceState(null, '', location.pathname);
+  return tok;
+}
+
 async function init(){
+  if(!LIB_READY){ renderLibWarning(); return; }
   if(!CONFIGURED){ renderConfigWarning(); return; }
+
+  const tok = readAccessToken();
+  if(tok){ state.token = tok; return openReportByToken(tok); }
+
   const { data } = await sb.auth.getSession();
   state.session = data.session;
   state.view = state.session ? 'list' : 'login';
@@ -219,6 +334,32 @@ async function loadBusinessFor(ownerId){
   }catch(e){ state.business = {}; }
 }
 
+/* Opening a report from an emailed link — no account, no sign-in. The token
+   is checked by report_by_token() in the database, which also hands back the
+   letterhead so a signed-out visitor still sees the right branding. */
+async function openReportByToken(tok){
+  /* Anything but 'login' here, or render() would flash the sign-in form
+     while the lookup is still in flight. */
+  state.view = 'loading';
+  state.busy = true; render();
+  const { data, error } = await sb.rpc('report_by_token', { tok });
+  state.busy = false;
+  /* One message whatever went wrong. Saying which part failed would let
+     someone test guessed tokens against this page. */
+  if(error || !data || !data.report){
+    state.token = null;
+    state.view = 'login';
+    state.msg = {type:'err', text:'This report link is no longer valid. Ask your inspector to send you a new one.'};
+    return render();
+  }
+  state.business = data.business || {};
+  state.current  = data.report;
+  state.reportId = data.report_id;
+  state.view     = 'report';
+  state.msg      = null;
+  render();
+}
+
 async function openReport(id){
   state.busy = true; render();
   const { data, error } = await sb.from('reports').select('data, owner_id').eq('id', id).single();
@@ -258,6 +399,22 @@ function renderBrand(){
     <div>
       <div class="brand-name">${esc(b.companyName || 'Your inspection reports')}</div>
       <div class="brand-sub">Client Portal</div>
+    </div>`;
+}
+
+function renderLibWarning(){
+  document.getElementById('app').innerHTML = `
+    <div class="config-warn">
+      <b>Could not load the page.</b><br><br>
+      A file this page needs did not download, so your report could not be opened.
+      That is nearly always the connection rather than the page itself: an ad or
+      privacy blocker, a network that filters outside scripts, or a signal that
+      dropped mid-load.<br><br>
+      Try reloading, switch the blocker off for this site, or come back on a
+      different connection.
+      <div style="margin-top:14px;">
+        <button onclick="location.reload()" style="font:inherit;font-weight:600;padding:9px 16px;border-radius:7px;border:1px solid #8A6416;background:transparent;color:#8A6416;cursor:pointer;">Reload</button>
+      </div>
     </div>`;
 }
 
@@ -330,7 +487,7 @@ function renderReport(app){
   const summ = (r.summaryFields||[]).filter(f=>f.value && String(f.value).trim());
 
   app.innerHTML = `
-    <div class="back-link" onclick="backToList()">&larr; All reports</div>
+    ${state.token ? '' : `<div class="back-link" onclick="backToList()">&larr; All reports</div>`}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
       <div>
         <h1 style="font-size:22px;margin:0 0 3px;color:var(--ink);">${esc(r.reportTitle || 'Leak Detection Report')}</h1>
