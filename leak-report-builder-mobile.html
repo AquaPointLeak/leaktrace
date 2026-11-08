@@ -984,7 +984,12 @@ function collectMediaPaths(report){
 function moveCategory(catId,dir){ const cats=state.current.categories; const i=cats.findIndex(c=>c.id===catId); const j=i+dir; if(j<0||j>=cats.length) return; [cats[i],cats[j]]=[cats[j],cats[i]]; renderEditor(); }
 
 function addItem(catId, label){ if(!label||!label.trim()) return; findCat(catId).items.push({id:uid(), label:label.trim(), status:'Pass', note:'', photos:[]}); renderEditor(); }
-function deleteItem(catId, itemId){ const cat=findCat(catId); cat.items = cat.items.filter(i=>i.id!==itemId); renderEditor(); }
+function deleteItem(catId, itemId){
+  const cat=findCat(catId); const item=cat.items.find(i=>i.id===itemId);
+  if(item && ((item.note||'').trim() || (item.photos||[]).length) && !confirm('Remove this item with its note and photos?')) return;
+  if(item) removeStoredMedia(collectMediaPaths({categories:[{items:[item]}]}));
+  cat.items = cat.items.filter(i=>i.id!==itemId); renderEditor();
+}
 function findItem(catId, itemId){ return findCat(catId).items.find(i=>i.id===itemId); }
 
 async function handleItemPhotoFiles(catId, itemId, fileList){
