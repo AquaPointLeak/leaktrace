@@ -2559,6 +2559,8 @@ function renderCustomerFields(){
     inp.oninput = e => {
       const f = state.current.customerFields.find(x=>x.id===e.target.dataset.id);
       if(f) f[e.target.dataset.part] = e.target.value;
+      const title = document.getElementById('editorTitle');
+      if(title) title.textContent = reportClientName(state.current) || 'Untitled report';
     };
   });
   autoGrowTextareas(wrap);

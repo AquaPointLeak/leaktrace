@@ -2518,7 +2518,7 @@ function renderEditor(){
   const app = document.getElementById('mainPanel'); const r = state.current;
   app.innerHTML = `
     <div class="editor-header">
-      <h1>${esc(r.clientName||'Untitled report')}</h1>
+      <h1 id="editorTitle">${esc(reportClientName(r)||'Untitled report')}</h1>
       <button class="btn btn-outline btn-sm" onclick="closeMain()">✕ Close</button>
     </div>
     <div class="card">
@@ -2612,6 +2612,8 @@ function renderCustomerFields(){
     inp.oninput = e => {
       const f = state.current.customerFields.find(x=>x.id===e.target.dataset.id);
       if(f) f[e.target.dataset.part] = e.target.value;
+      const title = document.getElementById('editorTitle');
+      if(title) title.textContent = reportClientName(state.current) || 'Untitled report';
     };
   });
   autoGrowTextareas(wrap);
