@@ -413,13 +413,18 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
 
 document.getElementById('yr').textContent = '© ' + new Date().getFullYear();
 
+/* Wide screens get the desktop builder; phones and tablets keep the mobile one. */
+const APP_URL = (window.matchMedia && window.matchMedia('(min-width: 900px)').matches)
+  ? 'leak-report-builder-desktop.html' : 'leak-report-builder-mobile.html';
+document.querySelectorAll('a[href="leak-report-builder-mobile.html"]').forEach(a=>a.setAttribute('href', APP_URL));
+
 /* A magic link can land here if the Supabase Site URL points at the site root.
    Forward the token to whichever app the person was signing in to, rather than
    stranding them on the marketing page. */
 function forwardAuthHash(){
   const hash = window.location.hash || '';
   if(hash.indexOf('access_token=') < 0 && hash.indexOf('error=') < 0) return false;
-  let target = 'leak-report-builder-mobile.html';
+  let target = APP_URL;
   try{
     const saved = sessionStorage.getItem('lastApp');
     if(saved) target = saved;
@@ -443,7 +448,7 @@ async function showSession(){
       <div class="session">
         <span style="color:var(--ink);">Already signed in as <b>${esc(s.user.email||'')}</b></span>
         <span>
-          <a href="leak-report-builder-mobile.html" style="font-weight:600;">Open the app</a>
+          <a href="${APP_URL}" style="font-weight:600;">Open the app</a>
           &nbsp;·&nbsp;
           <button class="linkish" onclick="signOut()">Sign out</button>
         </span>
