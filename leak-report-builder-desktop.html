@@ -952,8 +952,8 @@ async function newReport(templateId){
 async function saveAsTemplate(){
   const sections = state.current.categories.map(c=>({ title:c.title, intro:c.intro, items:c.items.map(i=>i.label) }));
   let name;
-  try{ name = prompt('Save these sections as a new preset. Name it:', 'From '+(state.current.clientName||'report')); }
-  catch(e){ name = 'From '+(state.current.clientName||'report'); }
+  try{ name = prompt('Save these sections as a new preset. Name it:', 'From '+(reportClientName(state.current)||'report')); }
+  catch(e){ name = 'From '+(reportClientName(state.current)||'report'); }
   if(name === null) return;
   if(!name || !name.trim()) name = 'Untitled preset';
   const t = {id:uid(), name:name.trim(), isDefault:false, disclaimer:(state.current.disclaimer||''),
