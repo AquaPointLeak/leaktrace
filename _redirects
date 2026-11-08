@@ -2,7 +2,10 @@
 # The QA harness, tooling and notes live in the repo (not on the website).
 # "404!" forces the rule even where a file exists.
 /leak%20trace%20testers/*   /404.html   404!
+/Leak%20Trace%20Testers/*   /404.html   404!
 /.claude/*                  /404.html   404!
 /supabase/*                 /404.html   404!
 /notes%20on%20rebuild/*     /404.html   404!
+/Notes%20on%20rebuild/*     /404.html   404!
 /readme.md                  /404.html   404!
+/README.md                  /404.html   404!
