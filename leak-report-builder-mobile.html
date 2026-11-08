@@ -848,11 +848,19 @@ async function saveBusiness(){
   showToast('Business settings saved');
   render();
 }
-function removeLogo(){ state.business.logoDataUrl=''; renderSettings(); }
+function removeLogo(){ state.business.logoDataUrl=''; rerenderSettingsKeepingInput(); }
 function handleLogoFile(fileList){
   const f = fileList[0]; if(!f) return;
-  fileToCompressedDataUrl(f, 400, 0.8).then(dataUrl=>{ state.business.logoDataUrl = dataUrl; renderSettings(); })
+  fileToCompressedDataUrl(f, 400, 0.8).then(dataUrl=>{ state.business.logoDataUrl = dataUrl; rerenderSettingsKeepingInput(); })
     .catch(()=> showToast('Could not process that image'));
+}
+/* Changing the logo redraws the settings form; carry over anything typed but not yet saved. */
+function rerenderSettingsKeepingInput(){
+  const ids = ['s_name','s_phone','s_email','s_headercolor','s_headerhex'];
+  const typed = {};
+  ids.forEach(id=>{ const el = document.getElementById(id); if(el) typed[id] = el.value; });
+  renderSettings();
+  ids.forEach(id=>{ const el = document.getElementById(id); if(el && id in typed) el.value = typed[id]; });
 }
 
 /* ---------------- report persistence ---------------- */
