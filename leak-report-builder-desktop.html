@@ -612,6 +612,8 @@ function friendlyAuthError(msg){
     return 'There is already an account with that email. Sign in instead.';
   if(m.indexOf('email not confirmed') >= 0)
     return 'Confirm your email first — check your inbox for the confirmation link.';
+  if(m.indexOf('different from the old password') >= 0)
+    return 'Choose a new password that is different from your current one.';
   if(m.indexOf('password should be') >= 0)
     return 'That password is too short. Use at least ' + MIN_PASSWORD + ' characters.';
   if(m.indexOf('rate limit') >= 0 || m.indexOf('too many') >= 0)
