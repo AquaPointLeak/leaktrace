@@ -576,7 +576,7 @@ async function init(){
     state.recovering = true;
   }
 
-  // "Start free" links on the landing page arrive as #signup: open the
+  // Sign-up buttons on the landing page arrive as #signup: open the
   // create-account form rather than sign-in (unless they're already signed in).
   if((window.location.hash||'') === '#signup' && !state.session){
     state.authMode = 'signup';
