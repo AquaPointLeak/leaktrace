@@ -1281,10 +1281,31 @@ function savePDF(doc, filename){
   }
 }
 
+/* jsPDF's built-in Helvetica only has Windows-1252 glyphs. Any other character
+   (emoji, symbols) makes jsPDF re-encode the whole string and it prints as garbage,
+   so accented letters are swapped for their plain form and the rest is left out. */
+const PDF_CHARS = /[\u0000-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018-\u201A\u201C-\u201E\u2020-\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/;
+function pdfSafe(t){
+  if(Array.isArray(t)) return t.map(pdfSafe);
+  if(typeof t !== 'string') return t;
+  let out = '';
+  for(const ch of t){
+    if(PDF_CHARS.test(ch)){ out += ch; continue; }
+    const plain = ch.normalize('NFKD').replace(/[\u0300-\u036F]/g,'');
+    if(plain && [...plain].every(c=>PDF_CHARS.test(c))) out += plain;
+  }
+  return out;
+}
+function pdfSafeDoc(doc){
+  const rawText = doc.text.bind(doc), rawSplit = doc.splitTextToSize.bind(doc);
+  doc.text = (t, ...rest) => rawText(pdfSafe(t), ...rest);
+  doc.splitTextToSize = (t, ...rest) => rawSplit(pdfSafe(t), ...rest);
+  return doc;
+}
 async function buildPDF(){
   await saveCurrentReport(true);
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt',format:'a4'});
+  const doc = pdfSafeDoc(new jsPDF({unit:'pt',format:'a4'}));
   const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
   const margin = 44, contentW = pageW - margin*2;
   let y = margin;
