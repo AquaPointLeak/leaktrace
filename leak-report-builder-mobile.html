@@ -2526,6 +2526,8 @@ function renderList(){
 
 function renderEditor(){
   const app = document.getElementById('app'); const r = state.current;
+  // A report opened from the list, or a different report, starts at the top. Re-renders of the same report keep the scroll.
+  const freshOpen = !app.querySelector('#catsWrap') || app.dataset.reportId !== r.id;
   app.innerHTML = `
     <div class="back-link" onclick="goList()">&larr; All Reports</div>
     <div class="card">
@@ -2598,6 +2600,8 @@ function renderEditor(){
   renderJobFields();
   renderCategories();
   autoGrowTextareas(app);
+  app.dataset.reportId = r.id;
+  if(freshOpen) window.scrollTo(0,0);
 }
 
 
