@@ -542,7 +542,7 @@ async function downloadPDF(){
         if(item.note && item.note.trim()){
           doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,100,98);
           const nl = doc.splitTextToSize(item.note, contentW-320);
-          doc.text(nl[0]||'', margin+320, y);
+          nl.forEach((ln,li)=>{ if(li){ y+=10; ensure(10); } doc.text(ln, margin+320, y); });
         }
         y += 15;
         if((item.photos||[]).length){

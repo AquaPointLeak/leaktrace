@@ -1430,7 +1430,7 @@ async function buildPDF(){
         if(item.note && item.note.trim()){
           doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,100,98);
           const noteLines = doc.splitTextToSize(item.note, contentW-320);
-          doc.text(noteLines[0]||'', margin+320, y);
+          noteLines.forEach((line,li)=>{ if(li){ y+=10; ensureSpace(10); } doc.text(line, margin+320, y); });
         }
         y += 15;
 
