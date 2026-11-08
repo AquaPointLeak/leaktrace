@@ -414,6 +414,7 @@ function normalizeReport(r){
   }
   (r.summaryFields||[]).forEach(f=>{ if(!f.id) f.id = uid(); });
   if(typeof r.sharedWithClient !== 'boolean') r.sharedWithClient = false;
+  r.disclaimer = cleanDisclaimer(r.disclaimer);
   return r;
 }
 /* Read the role-tagged customer values the rest of the app depends on. */
@@ -503,10 +504,12 @@ const CUSTOMER_ROLES = [
   {value:'email',   label:'Email'}
 ];
 const DEFAULT_SUMMARY_FIELDS = ['Key findings','Suspicions / correlations','Recommended actions'];
-const DEFAULT_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the inspection. It does not certify code compliance or guarantee against future leaks. Replace this placeholder with your own reviewed terms under Preset Sections.";
-/* Wording before the disclaimer moved to Preset Sections. Accounts that saved
-   Business Settings kept a copy of it; swap it out only if it was never edited. */
-const LEGACY_DEFAULT_DISCLAIMER = DEFAULT_DISCLAIMER.replace('under Preset Sections.', 'in Business Settings.');
+const DEFAULT_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the inspection. It does not certify code compliance or guarantee against future leaks.";
+/* The starter wording used to end with a note to the owner ("Replace this placeholder ...")
+   that got copied into Business Settings, presets and reports and printed on customer PDFs.
+   Strip that note wherever an old copy turns up; the rest of the text is left alone. */
+const DISCLAIMER_PLACEHOLDER_NOTE = /\s*Replace this placeholder with your own reviewed terms (?:under Preset Sections|in Business Settings)\./g;
+function cleanDisclaimer(t){ return (typeof t === 'string') ? t.replace(DISCLAIMER_PLACEHOLDER_NOTE, '') : t; }
 const DEFAULT_CATEGORY_TEMPLATE = [
   {title:'Job Site', intro:'', items:[]},
   {title:'Visual Leak Inspection', intro:'', items:['Equipment area','Back wash','Around water feature','Structural cracks in pool','Bond beam']},
@@ -548,7 +551,7 @@ function autoGrowTextareas(container){
 async function loadEverything(){
   state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
   if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
-  if(state.business.disclaimerDefault === LEGACY_DEFAULT_DISCLAIMER) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
+  state.business.disclaimerDefault = cleanDisclaimer(state.business.disclaimerDefault);
   state.reportsIndex = (await storeGet('reports-index')) || [];
   await loadTemplates();
   await checkAdmin();
@@ -1600,7 +1603,7 @@ async function loadTemplates(){
     id: t.id || uid(),
     name: t.name || 'Untitled preset',
     isDefault: !!t.isDefault,
-    disclaimer: (typeof t.disclaimer === 'string') ? t.disclaimer : (state.business.disclaimerDefault || DEFAULT_DISCLAIMER),
+    disclaimer: (typeof t.disclaimer === 'string') ? cleanDisclaimer(t.disclaimer) : (state.business.disclaimerDefault || DEFAULT_DISCLAIMER),
     jobHeading: (typeof t.jobHeading === 'string' && t.jobHeading) ? t.jobHeading : 'Job Information',
     jobFields: (t.jobFields && t.jobFields.length) ? t.jobFields.slice() : DEFAULT_JOB_FIELDS.slice(),
     reportTitle: (typeof t.reportTitle === 'string' && t.reportTitle) ? t.reportTitle : DEFAULT_REPORT_TITLE,
@@ -2128,7 +2131,7 @@ async function copyFromCatalogue(id){
     summaryHeading:    d.summaryHeading || DEFAULT_SUMMARY_HEADING,
     summaryFields:     (d.summaryFields && d.summaryFields.length) ? d.summaryFields.slice() : DEFAULT_SUMMARY_FIELDS.slice(),
     disclaimerHeading: d.disclaimerHeading || DEFAULT_DISCLAIMER_HEADING,
-    disclaimer:        d.disclaimer || state.business.disclaimerDefault || DEFAULT_DISCLAIMER,
+    disclaimer:        cleanDisclaimer(d.disclaimer) || state.business.disclaimerDefault || DEFAULT_DISCLAIMER,
     sections:          tplNormalize(d.sections || DEFAULT_CATEGORY_TEMPLATE),
     publishedId: null
   };
@@ -2418,7 +2421,7 @@ function renderTemplate(){
     </div>
     <div class="card">
       <h3>Disclaimer</h3>
-      <div class="subnote">Reports started from this preset begin with this text. You can still edit it per report.</div>
+      <div class="subnote">Reports started from this preset begin with this text. You can still edit it per report. The starter wording is a generic example: replace it with terms you have had reviewed.</div>
       <div class="field" style="margin-bottom:12px;">
         <label>Heading</label>
         <input id="tplDiscHeading" value="${esc(activeTemplate().disclaimerHeading || DEFAULT_DISCLAIMER_HEADING)}" placeholder="Disclaimer">

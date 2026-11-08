@@ -229,6 +229,9 @@ async function openReport(id){
   }
   await loadBusinessFor(data.owner_id);
   state.current = data.data;
+  // Older reports can still carry the builder's old starter note to the owner; never show it to customers.
+  if(state.current && typeof state.current.disclaimer === 'string')
+    state.current.disclaimer = state.current.disclaimer.replace(/\s*Replace this placeholder with your own reviewed terms (?:under Preset Sections|in Business Settings)\./g, '');
   state.view = 'report';
   state.msg = null;
   render();
