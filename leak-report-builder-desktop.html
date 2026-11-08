@@ -516,6 +516,9 @@ const CUSTOMER_ROLES = [
 ];
 const DEFAULT_SUMMARY_FIELDS = ['Key findings','Suspicions / correlations','Recommended actions'];
 const DEFAULT_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the inspection. It does not certify code compliance or guarantee against future leaks. Replace this placeholder with your own reviewed terms under Preset Sections.";
+/* Wording before the disclaimer moved to Preset Sections. Accounts that saved
+   Business Settings kept a copy of it; swap it out only if it was never edited. */
+const LEGACY_DEFAULT_DISCLAIMER = DEFAULT_DISCLAIMER.replace('under Preset Sections.', 'in Business Settings.');
 const DEFAULT_CATEGORY_TEMPLATE = [
   {title:'Job Site', intro:'', items:[]},
   {title:'Visual Leak Inspection', intro:'', items:['Equipment area','Back wash','Around water feature','Structural cracks in pool','Bond beam']},
@@ -543,6 +546,7 @@ function autoGrowTextareas(container){
 async function loadEverything(){
   state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
   if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
+  if(state.business.disclaimerDefault === LEGACY_DEFAULT_DISCLAIMER) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
   state.reportsIndex = (await storeGet('reports-index')) || [];
   await loadTemplates();
   await checkAdmin();
