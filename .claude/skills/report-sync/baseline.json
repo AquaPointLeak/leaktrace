@@ -1,0 +1,19 @@
+{
+  "<markup>": "differs:448aa5917adb",
+  "<style>": "differs:6b033d04c81d",
+  "MAIN_EL": "differs:2183b71e10ec",
+  "closeMain": "only-desktop:066c2c435a15",
+  "goList": "only-mobile:f59543035155",
+  "render": "differs:8ac5257b33a5",
+  "renderCatalogue": "differs:3a434a5e3407",
+  "renderCategories": "differs:62d30a80b2b4",
+  "renderEditor": "differs:33f593524a87",
+  "renderList": "only-mobile:19e4a990ffb6",
+  "renderMainEmpty": "only-desktop:76fc474f9c0f",
+  "renderReview": "differs:c2518b901fb6",
+  "renderSettings": "differs:dbf0c91cc720",
+  "renderSidebar": "only-desktop:bf09d60884ae",
+  "renderTemplate": "differs:4555674594e2",
+  "renderTopbar": "only-mobile:1c0ffd8cd2c8",
+  "saveCurrentReport": "differs:382b0774597e"
+}
