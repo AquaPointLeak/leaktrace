@@ -94,3 +94,33 @@ Make it realistic and varied:
 - **Job info:** made-up job numbers, dates and technician names.
 - **Findings:** a mix of Pass, Attention, Fail and N/A, with notes such as "Dye test showed draw at main drain cover", "Skimmer throat crack, 2in", "Static test held 30 min on return line 2".
 - **Edge cases:** long names, apostrophes, `<b>html</b>`, emoji, blank optional fields, a very long note.
+
+---
+
+## Run 2 addendum (read this too)
+
+**State of the app now.** BUG-001 to BUG-014 are fixed and verified, so run `bug list` before filing anything. Things you should expect and not report:
+- The landing page offers the **first month free**: nav button "First month free", hero and pricing buttons "Start your first month free", closing banner "Your first month is free".
+- Those sign-up buttons open the builder on the **create-account** form (the link carries `#signup`). The "Sign in" link opens the sign-in form.
+- There is **no billing, trial or card collection anywhere** in the app, and the hero says "No card required". Report that once, as a go-live finding (below), not on every page.
+
+**This run has two jobs:** find defects, and judge whether the site is ready to go live and be sold.
+
+### Go-live readiness (both testers; start these titles with `[GO-LIVE]`)
+Walk the whole first-customer journey as a stranger would: land → sign up → confirm email → set up the letterhead → first report with photos → PDF → share with a customer → the customer opens the portal. Then check:
+1. **Copy and pricing:** the offer wording, prices and plan names agree everywhere; no placeholder or lorem text; no dead buttons or anchors (for example, does "Get in touch" lead anywhere you can actually contact someone?).
+2. **Trust and legal:** Terms of service, Privacy policy, a support contact and a company name or address can be found from the landing page, sign-up and portal.
+3. **Sign-up and recovery:** every error message is plain English and says what to do (wrong password, duplicate email, expired or reused confirm, magic and reset links, weak password). Nothing dead-ends.
+4. **Data safety:** photos, video and notes survive save, reload, backup and restore. Deleting asks first. Nothing leaks between accounts or between customers.
+5. **Output quality:** the PDF looks like something you would hand a paying customer (fonts, logo, long text, many photos, odd characters).
+6. **Mobile and desktop:** tap targets, sideways scrolling, the keyboard covering fields, cut-off buttons, readable text.
+7. **Page basics:** tab titles, favicon, share/meta tags, 404 behaviour, accessibility basics (labels, contrast, keyboard focus).
+
+Severity for `[GO-LIVE]` items: **critical** = you could not sell it, or you would be exposed (data loss, privacy leak, cannot sign up). **high** = would embarrass you or lose a customer at launch. **medium / low** = polish. Gaps only the owner can fill (billing, legal text, a support address) are still reported, once each, with `--area other`.
+
+### Coordinator rules for this run
+- **Nothing in the original files changes until the user approves.** Prepare each fix as `board/fixes/FIX-NNN.diff`, a unified diff against the originals in `/Users/juju_mclovin/Desktop/LeakTrace`, and make sure it passes `git apply --check`. Try it on a scratch clone first: copy `harness/` and `site/` into `board/fixes/work/FIX-NNN/`, apply the patch there, run `PORT=879N python3 harness/server.py` from the clone and test on `http://x.localhost:879N/site/...`, then stop that scratch server.
+- Both builders get edited together. Follow `.claude/skills/report-sync/SKILL.md` and run `python3 .claude/skills/report-sync/sync_check.py` from the LeakTrace folder.
+- Bugs that need an owner decision or content only the owner has (billing, legal text, support contact): set status `triaged` with `--set needs_owner=true` and `--set owner_question="..."`. They go in the readiness verdict, not the fix queue.
+- **Approval:** set `awaiting-approval` and end your turn with an APPROVAL PACKET. The user's answer arrives as a message. After a yes: apply the patch, run `sync_check.py`, run `python3 harness/build_site.py`, set `fixed`, and commit locally (one commit per fix, message `Fix BUG-NNN: <title>`, with a `Co-Authored-By:` trailer naming your own model). **Never `git push`**; the user pushes. Testers then re-test and set `verified` or `reopened`.
+- The shared `site/` folder is what the testers use. Only run `build_site.py` after an approved fix is applied.
