@@ -455,6 +455,7 @@ function downloadReportBackup(silent){
 }
 function restoreReportBackup(fileList){
   const f = fileList[0]; if(!f) return;
+  if(!confirmLeaveReport()) return;
   const reader = new FileReader();
   reader.onload = e => {
     try{
@@ -532,6 +533,20 @@ const DEFAULT_CATEGORY_TEMPLATE = [
 let state = { view:'list', reportsIndex:[], current:null, business:{}, search:'', statusFilter:'All', templates:[], activeTemplateId:null, session:null, authMsg:null, authBusy:false, authMode:'signin', recovering:false, authEmail:'', catalogue:[], catSearch:'', catExpanded:null, catBusy:false, catError:null, isAdmin:false, reviewQueue:[], revFilter:'pending', revBusy:false, revError:null };
 
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+
+/* Unsaved-changes guard. Opening another report, starting a new one, closing the
+   editor, going to settings, signing out or restoring a backup used to replace the
+   open report without a word, losing everything typed since the last Save.
+   Compare against the last saved copy and ask first. */
+let savedSnapshot = null;
+function reportSnapshot(r){ try{ return r ? JSON.stringify(r) : null; }catch(e){ return null; } }
+function markReportSaved(){ savedSnapshot = reportSnapshot(state.current); }
+function hasUnsavedChanges(){ return !!(state.current && state.view==='editor' && reportSnapshot(state.current) !== savedSnapshot); }
+function confirmLeaveReport(){
+  if(!hasUnsavedChanges()) return true;
+  return confirm('You have unsaved changes to this report. Leave without saving them?');
+}
+window.addEventListener('beforeunload', e=>{ if(hasUnsavedChanges()){ e.preventDefault(); e.returnValue=''; } });
 
 function autoGrowTextareas(container){
   (container||document).querySelectorAll('textarea').forEach(ta=>{
@@ -749,6 +764,7 @@ function togglePasswordView(id, btn){
 }
 
 async function signOut(){
+  if(!confirmLeaveReport()) return;
   await sb.auth.signOut();
   state.session = null; state.reportsIndex = []; state.current = null;
   state.view = 'list'; state.authMode = 'signin'; state.recovering = false; state.authEmail = '';
@@ -893,6 +909,7 @@ async function persistIndex(){ await storeSet('reports-index', state.reportsInde
 async function saveCurrentReport(silent){
   if(!state.current) return;
   state.current.updatedAt = Date.now();
+  const snap = reportSnapshot(state.current), savedId = state.current.id;
   const result = await storeSet('report:'+state.current.id, state.current);
   const summary = { id: state.current.id, reportNumber: state.current.reportNumber, clientName: reportClientName(state.current) || 'Untitled report', address: reportAddress(state.current) || '', date: (state.current.jobFields.find(f=>/date performed/i.test(f.label))||{}).value || '', status: state.current.status || 'Draft', updatedAt: state.current.updatedAt };
   const i = state.reportsIndex.findIndex(r=>r.id===state.current.id);
@@ -903,6 +920,7 @@ async function saveCurrentReport(silent){
     downloadReportBackup(true);
     return;
   }
+  if(state.current && state.current.id === savedId) savedSnapshot = snap;
   await persistIndex();
   if(!silent) showToast('Report saved');
 }
@@ -916,19 +934,21 @@ async function deleteReport(id){
   await storeDelete('report:'+id);
   state.reportsIndex = state.reportsIndex.filter(r=>r.id!==id);
   await persistIndex();
-  state.view='list'; state.current=null;
+  if(!state.current || state.current.id === id){ state.view='list'; state.current=null; }
   render();
   showToast('Report deleted');
 }
 
 async function openReport(id){
+  if(state.view==='editor' && state.current && state.current.id===id) return;   // already open: don't reload over unsaved edits
+  if(!confirmLeaveReport()) return;
   const r = await storeGet('report:'+id);
   if(!r){
     if(state.current && state.current.id === id){ state.view='editor'; render(); return; }
     showToast('Could not load report — try Restore Backup if you saved one');
     return;
   }
-  state.current = normalizeReport(r); state.view='editor'; render();
+  state.current = normalizeReport(r); markReportSaved(); state.view='editor'; render();
 }
 
 async function newReport(templateId){
@@ -955,6 +975,7 @@ async function newReport(templateId){
     sharedWithClient:false,
     status:'Draft', createdAt: Date.now(), updatedAt: Date.now()
   };
+  markReportSaved();
   state.view='editor';
   render();
 }
@@ -1729,7 +1750,7 @@ function resetTemplate(){
   renderTemplateSections();
   showToast('Reset — hit Save to keep this');
 }
-function goTemplate(){ state.view='template'; render(); }
+function goTemplate(){ if(!confirmLeaveReport()) return; state.view='template'; render(); }
 
 function addTplCustField(label){
   if(!label || !label.trim()) return;
@@ -1943,6 +1964,7 @@ function showPresetChooser(){
   document.body.appendChild(div);
 }
 function startNewReport(){
+  if(!confirmLeaveReport()) return;
   if(state.templates.length > 1) showPresetChooser();
   else newReport();
 }
@@ -1998,6 +2020,7 @@ async function loadCatalogue(){
 }
 
 function goCatalogue(){
+  if(!confirmLeaveReport()) return;
   state.view = 'catalogue';
   render();
   loadCatalogue();
@@ -2210,6 +2233,7 @@ function reviewBadge(st){
 }
 
 function goReview(){
+  if(!confirmLeaveReport()) return;
   state.view = 'review';
   render();
   loadReviewQueue();
@@ -2495,8 +2519,8 @@ function renderMainEmpty(){
     </div>`;
 }
 
-function closeMain(){ state.view='list'; state.current=null; render(); }
-function goSettings(){ state.view='settings'; render(); }
+function closeMain(){ if(!confirmLeaveReport()) return; state.view='list'; state.current=null; render(); }
+function goSettings(){ if(!confirmLeaveReport()) return; state.view='settings'; render(); }
 
 function renderSettings(){
   const app = document.getElementById('mainPanel'); const b = state.business;
