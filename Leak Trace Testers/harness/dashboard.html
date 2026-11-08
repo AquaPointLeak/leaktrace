@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeakTrace QA Board</title>
+<style>
+:root{
+  --bg:#f6f7f5; --panel:#ffffff; --ink:#18201d; --muted:#66706b; --line:#e2e6e3; --soft:#eef2ef;
+  --accent:#1f6f5c; --accent-soft:#dcefe8;
+  --crit:#b42318; --high:#c4520c; --med:#a37800; --low:#5b6b65;
+  --ok:#1f7a4d; --warn:#b26b00; --idle:#8a938f; --blue:#2c5fb3;
+  --shadow:0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111513; --panel:#1a1f1d; --ink:#e7ecea; --muted:#9aa5a0; --line:#2b3330; --soft:#222927;
+    --accent:#4cc2a0; --accent-soft:#1d3a32;
+    --crit:#ff7a6e; --high:#ff9d57; --med:#e6c14e; --low:#a3b0aa;
+    --ok:#5fd29a; --warn:#f0b04a; --idle:#7b8580; --blue:#7aa7ff;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:17px;margin:0;letter-spacing:-.01em}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
+.live{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 var(--ok);animation:pulse 2s infinite}
+.dot.stale{background:var(--crit);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.counters{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.counter{background:var(--soft);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--muted)}
+.counter b{color:var(--ink);font-size:15px;margin-right:4px;font-variant-numeric:tabular-nums}
+main{padding:16px 20px 40px;max-width:1500px;margin:0 auto}
+section{margin-bottom:22px}
+.approval{display:none;background:color-mix(in srgb,var(--warn) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:10px;padding:12px 14px;margin-bottom:18px}
+.approval.on{display:block}
+.approval b{color:var(--warn)}
+.approval ul{margin:6px 0 0;padding-left:18px}
+.agents{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow);min-width:0}
+.agent-top{display:flex;align-items:flex-start;gap:10px}
+.avatar{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-weight:700;color:#fff;font-size:13px}
+.agent-name{font-weight:650}
+.agent-role{color:var(--muted);font-size:12px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--soft);color:var(--muted)}
+.pill{margin-left:auto;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.st-working{background:var(--accent-soft);color:var(--accent)}
+.st-waiting{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.st-blocked{background:color-mix(in srgb,var(--crit) 14%,transparent);color:var(--crit)}
+.st-done{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.st-idle{background:var(--soft);color:var(--idle)}
+.progress{height:8px;background:var(--soft);border-radius:99px;overflow:hidden;margin:12px 0 4px}
+.progress i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .6s ease}
+.pmeta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.step{margin:10px 0 8px;font-size:13px;padding:8px 10px;background:var(--soft);border-radius:8px;min-height:36px}
+.tasks{list-style:none;margin:0 0 10px;padding:0;font-size:12.5px}
+.tasks li{display:flex;gap:7px;padding:2px 0;color:var(--muted)}
+.tasks li.done{color:var(--ink)}
+.tasks li::before{content:"";flex:none;width:14px;height:14px;margin-top:1px;border-radius:4px;border:1.5px solid var(--line)}
+.tasks li.done::before{background:var(--accent);border-color:var(--accent);
+  -webkit-mask:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E")}
+.log{font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);border-radius:8px;padding:8px;height:130px;overflow:auto;color:var(--muted);white-space:pre-wrap;word-break:break-word}
+.board{display:grid;grid-template-columns:repeat(6,minmax(170px,1fr));gap:10px;overflow-x:auto;padding-bottom:4px}
+.col{background:var(--soft);border-radius:10px;padding:8px;min-height:90px;min-width:0}
+.col h3{font-size:12px;margin:2px 4px 8px;display:flex;justify-content:space-between;color:var(--muted);font-weight:600}
+.col h3 span{background:var(--panel);border-radius:99px;padding:0 7px;color:var(--ink)}
+.col.hot{outline:2px solid color-mix(in srgb,var(--warn) 55%,transparent)}
+.bug{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--low);border-radius:8px;padding:8px;margin-bottom:7px;font-size:12.5px;cursor:pointer}
+.bug.critical{border-left-color:var(--crit)}.bug.high{border-left-color:var(--high)}.bug.medium{border-left-color:var(--med)}
+.bug .id{font-weight:650;font-size:11.5px;color:var(--muted);display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.tag{font-size:10.5px;padding:1px 6px;border-radius:99px;background:var(--soft);color:var(--muted);font-weight:500}
+.sev-critical{color:var(--crit)}.sev-high{color:var(--high)}.sev-medium{color:var(--med)}.sev-low{color:var(--low)}
+.bug .t{margin-top:3px}
+.bug .detail{display:none;margin-top:8px;border-top:1px dashed var(--line);padding-top:6px;font-size:12px;color:var(--muted)}
+.bug.open .detail{display:block}
+.detail p{margin:3px 0}.detail b{color:var(--ink)}
+.closed{font-size:12px;color:var(--muted);margin-top:6px}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+.mail{font-size:12px}
+.mail div{padding:6px 0;border-bottom:1px solid var(--line)}
+.mail a{color:var(--accent);word-break:break-all}
+.empty{color:var(--muted);font-size:12px;padding:6px 4px}
+a{color:var(--accent)}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+@media (max-width:640px){header,main{padding-left:16px;padding-right:16px}.counters{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>LeakTrace QA Board</h1>
+  <div class="live"><span class="dot" id="dot"></span><span id="updated">connecting…</span></div>
+  <div class="counters" id="counters"></div>
+</header>
+<main>
+  <div class="approval" id="approval"></div>
+  <section>
+    <h2>Agents</h2>
+    <div class="agents" id="agents"></div>
+  </section>
+  <section>
+    <h2>Bug board</h2>
+    <div class="board" id="board"></div>
+    <div class="closed" id="closed"></div>
+  </section>
+  <section class="two">
+    <div class="card">
+      <h2>Test data in the mock backend</h2>
+      <div id="data" class="mail"></div>
+    </div>
+    <div class="card">
+      <h2>Mock mailbox</h2>
+      <div id="mail" class="mail"></div>
+    </div>
+  </section>
+</main>
+<script>
+const AGENTS = [
+  {id:'coordinator', name:'Coordinator', color:'#6d4bc4', init:'C', role:'Triage, fixes, approvals'},
+  {id:'tester-a', name:'Tester A', color:'#1f6f5c', init:'A', role:'Desktop first, then mobile'},
+  {id:'tester-b', name:'Tester B', color:'#2c5fb3', init:'B', role:'Mobile first, then desktop'}
+];
+const COLS = [
+  {k:'Reported', s:['reported','reopened']},
+  {k:'Triaged', s:['triaged']},
+  {k:'Fix proposed', s:['fix-proposed']},
+  {k:'Awaiting your approval', s:['awaiting-approval'], hot:true},
+  {k:'Approved', s:['approved']},
+  {k:'Fixed / verified', s:['fixed','verified']}
+];
+const open = new Set();
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sevRank = {critical:0, high:1, medium:2, low:3};
+function ago(t){ const s = Math.max(0, Math.round(Date.now()/1000 - t)); return s<60? s+'s ago' : s<3600? Math.round(s/60)+'m ago' : Math.round(s/3600)+'h ago'; }
+
+function renderAgents(list){
+  const by = Object.fromEntries(list.map(a=>[a.id,a]));
+  document.getElementById('agents').innerHTML = AGENTS.map(meta=>{
+    const a = by[meta.id];
+    if(!a) return `<div class="card"><div class="agent-top"><div class="avatar" style="background:${meta.color}">${meta.init}</div>
+      <div><div class="agent-name">${meta.name}</div><div class="agent-role">${meta.role}</div></div>
+      <span class="pill st-idle">Not started</span></div><div class="step">Waiting to launch</div></div>`;
+    const done = a.tasks.filter(t=>t.done).length, total = a.tasks.length || 1;
+    const pct = Math.round(done/total*100);
+    const stale = a.state!=='done' && (Date.now()/1000 - a.updated) > 600;
+    const st = stale ? 'idle' : (a.state||'working');
+    return `<div class="card">
+      <div class="agent-top"><div class="avatar" style="background:${meta.color}">${meta.init}</div>
+        <div style="min-width:0"><div class="agent-name">${esc(a.name||meta.name)}</div><div class="agent-role">${esc(a.role||meta.role)}</div>
+          <div class="chips"><span class="chip">${esc(a.model)}</span><span class="chip">effort: ${esc(a.effort)}</span></div></div>
+        <span class="pill st-${st}">${stale?'quiet '+ago(a.updated):esc(a.state)}</span></div>
+      <div class="progress"><i style="width:${pct}%"></i></div>
+      <div class="pmeta"><span>${done} of ${a.tasks.length} tasks</span><span>${pct}% · updated ${ago(a.updated)}</span></div>
+      <div class="step">${esc(a.step)}</div>
+      <ul class="tasks">${a.tasks.map(t=>`<li class="${t.done?'done':''}">${esc(t.text)}</li>`).join('')}</ul>
+      <div class="log" id="log-${a.id}">${esc((a.log||[]).join('\n'))}</div>
+    </div>`;
+  }).join('');
+  AGENTS.forEach(m=>{ const el = document.getElementById('log-'+m.id); if(el) el.scrollTop = el.scrollHeight; });
+}
+
+function bugCard(b){
+  const extra = [
+    ['Page', b.page], ['Steps', b.steps], ['Expected', b.expected], ['Actual', b.actual],
+    ['Requested fix', b.requested_fix], ['Root cause', b.root_cause], ['Chosen fix', b.chosen_fix],
+    ['Duplicate of', b.duplicate_of], ['Commit', b.commit]
+  ].filter(x=>x[1]).map(x=>`<p><b>${x[0]}:</b> ${esc(x[1])}</p>`).join('');
+  const fix = b.fix_file ? `<p><a href="/fixes/${esc(b.fix_file)}" target="_blank" onclick="event.stopPropagation()">View ${esc(b.fix_file)}</a></p>` : '';
+  return `<div class="bug ${esc(b.severity)} ${open.has(b.id)?'open':''}" onclick="toggle('${esc(b.id)}')">
+    <div class="id">${esc(b.id)} <span class="tag sev-${esc(b.severity)}">${esc(b.severity)}</span><span class="tag">${esc(b.viewport)}</span><span class="tag">${esc(b.reporter)}</span>${b.status==='reopened'?'<span class="tag sev-critical">reopened</span>':''}</div>
+    <div class="t">${esc(b.title)}</div>
+    <div class="detail">${extra}${fix}</div></div>`;
+}
+function toggle(id){ open.has(id) ? open.delete(id) : open.add(id); poll(); }
+
+function renderBugs(bugs){
+  const sorted = bugs.slice().sort((a,b)=>(sevRank[a.severity]??9)-(sevRank[b.severity]??9) || a.id.localeCompare(b.id));
+  document.getElementById('board').innerHTML = COLS.map(c=>{
+    const items = sorted.filter(b=>c.s.includes(b.status));
+    return `<div class="col ${c.hot && items.length?'hot':''}"><h3>${c.k}<span>${items.length}</span></h3>
+      ${items.map(bugCard).join('') || '<div class="empty">—</div>'}</div>`;
+  }).join('');
+  const closed = sorted.filter(b=>['duplicate','rejected','declined'].includes(b.status));
+  document.getElementById('closed').textContent = closed.length
+    ? 'Closed without a fix: ' + closed.map(b=>`${b.id} (${b.status}${b.duplicate_of?' of '+b.duplicate_of:''})`).join(', ') : '';
+  const waiting = sorted.filter(b=>b.status==='awaiting-approval');
+  const ap = document.getElementById('approval');
+  ap.className = 'approval' + (waiting.length ? ' on' : '');
+  ap.innerHTML = waiting.length ? `<b>${waiting.length} fix${waiting.length>1?'es':''} waiting for your approval.</b> Claude will ask you in the chat before anything is pushed.
+    <ul>${waiting.map(b=>`<li>${esc(b.id)} [${esc(b.severity)}] ${esc(b.title)}</li>`).join('')}</ul>` : '';
+}
+
+function renderCounts(c){
+  const items = [['accounts','Accounts'],['reports','Reports'],['presets','Presets'],['public_presets','Published'],['api_calls','API calls']];
+  document.getElementById('counters').innerHTML = items.map(([k,l])=>`<span class="counter"><b>${c[k]??0}</b>${l}</span>`).join('');
+  document.getElementById('data').innerHTML = `
+    <div>Accounts: <b>${c.accounts}</b> (${c.confirmed} confirmed)</div>
+    <div>Business profiles: <b>${c.business_profiles}</b></div>
+    <div>Reports: <b>${c.reports}</b></div>
+    <div>Private presets: <b>${c.presets}</b></div>
+    <div>Catalogue presets: <b>${c.public_presets}</b> (${c.approved_presets} approved)</div>
+    <div>Uploaded media files: <b>${c.media_files}</b></div>
+    <div style="border:0;color:var(--muted)">All of this lives in the local mock backend only. Your live Supabase project is never contacted.</div>`;
+}
+
+function renderMail(m){
+  document.getElementById('mail').innerHTML = m.length ? m.slice().reverse().slice(0,12).map(x=>
+    `<div><b>${esc(x.to)}</b> · ${esc(x.kind)} · <span style="color:var(--muted)">${esc(x.at.slice(11,19))}</span><br><a href="${esc(x.link)}" target="_blank">open link</a></div>`).join('')
+    : '<div class="empty">No mail yet. Sign-up confirmations, magic links and reset links appear here.</div>';
+}
+
+let lastOk = 0;
+async function poll(){
+  try{
+    const r = await fetch('/api/state', {cache:'no-store'});
+    const s = await r.json();
+    lastOk = Date.now();
+    renderAgents(s.agents); renderBugs(s.bugs); renderCounts(s.counts); renderMail(s.mailbox);
+  }catch(e){}
+  const stale = Date.now() - lastOk > 8000;
+  document.getElementById('dot').className = 'dot' + (stale ? ' stale' : '');
+  document.getElementById('updated').textContent = stale ? 'harness server not responding' : 'live · ' + new Date(lastOk).toLocaleTimeString();
+}
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>

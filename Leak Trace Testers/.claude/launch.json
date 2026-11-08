@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "leaktrace-qa",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "harness/server.py"
+      ],
+      "port": 8787
+    }
+  ]
+}

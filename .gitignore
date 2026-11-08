@@ -3,3 +3,4 @@ Leak Trace Testers/site/
 Leak Trace Testers/mockdb/
 Leak Trace Testers/board/
 __pycache__/
+Leak Trace Testers/harness/test-accounts.json
