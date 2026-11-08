@@ -416,7 +416,9 @@ document.getElementById('yr').textContent = '© ' + new Date().getFullYear();
 /* Wide screens get the desktop builder; phones and tablets keep the mobile one. */
 const APP_URL = (window.matchMedia && window.matchMedia('(min-width: 900px)').matches)
   ? 'leak-report-builder-desktop.html' : 'leak-report-builder-mobile.html';
-document.querySelectorAll('a[href="leak-report-builder-mobile.html"]').forEach(a=>a.setAttribute('href', APP_URL));
+/* Match by substring: Netlify's "Pretty URLs" rewrites the hrefs to '/leak-report-builder-mobile' (no .html),
+   which an exact-match selector would miss. */
+document.querySelectorAll('a[href*="leak-report-builder-mobile"]').forEach(a=>a.setAttribute('href', APP_URL));
 
 /* A magic link can land here if the Supabase Site URL points at the site root.
    Forward the token to whichever app the person was signing in to, rather than
