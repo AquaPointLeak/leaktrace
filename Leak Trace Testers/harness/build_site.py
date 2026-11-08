@@ -13,7 +13,7 @@ SITE = ROOT / 'site'
 PAGES = ['index.html', 'aquapoint-portal.html',
          'leak-report-builder-desktop.html', 'leak-report-builder-mobile.html']
 
-CDN = re.compile(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"></script>')
+CDN = re.compile(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@[0-9.]+"[^>]*></script>')
 URL = re.compile(r"(const SUPABASE_URL\s*=\s*)'https://[a-z0-9]+\.supabase\.co'")
 BANNER = ('<div id="qa-banner" style="position:fixed;bottom:0;right:0;z-index:99999;'
           'background:#1f6f5c;color:#fff;font:600 10px/1 system-ui;padding:3px 6px;'
