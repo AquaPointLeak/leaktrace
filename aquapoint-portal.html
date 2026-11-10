@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Your Leak Detection Reports</title>
+<title>Your Reports</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <style>
@@ -116,7 +116,7 @@
 <body>
 <div id="topbar">
   <div class="brand" id="brandBox">
-    <div><div class="brand-name">Leak Detection Reports</div><div class="brand-sub">Client Portal</div></div>
+    <div><div class="brand-name">Your Reports</div><div class="brand-sub">Client Portal</div></div>
   </div>
   <div id="topActions"></div>
 </div>
@@ -346,7 +346,7 @@ function renderList(app){
       <div>
         <div class="rc-name">
           ${fmtReportNo(r.report_number) ? `<span class="rc-no">${fmtReportNo(r.report_number)}</span> ` : ''}
-          ${esc(r.property_address || r.client_name || 'Leak detection report')}
+          ${esc(r.property_address || r.client_name || 'Report')}
         </div>
         <div class="rc-meta">${esc(r.report_date || fmtDate(r.updated_at))}</div>
       </div>
@@ -509,7 +509,7 @@ async function downloadPDF(){
            doc.addImage(biz.logoDataUrl, undefined, margin, (bandH-h)/2, w, h); textX = margin+w+14; }catch(e){}
     }
     doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(fg[0],fg[1],fg[2]);
-    doc.text(biz.companyName || 'Leak Detection Report', textX, bandH/2 - 2);
+    doc.text(biz.companyName || 'Service Report', textX, bandH/2 - 2);
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(fgSoft[0],fgSoft[1],fgSoft[2]);
     doc.text([biz.companyPhone, biz.companyEmail].filter(Boolean).join('   |   '), textX, bandH/2 + 13);
     const rno = fmtNo(r.reportNumber);

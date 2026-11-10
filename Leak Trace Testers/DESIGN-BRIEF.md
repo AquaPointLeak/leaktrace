@@ -1,4 +1,4 @@
-# LeakTrace front-end redesign: audit and brief
+# VisitWrap front-end redesign: audit and brief
 
 Audit date: 2026-11-09. Based on the source of all four pages plus screenshots of
 the landing page (first two screens), both login screens, the desktop builder
@@ -18,6 +18,18 @@ Components were restyled to match: buttons, cards, pills, section labels, logo m
 top bars and focus rings. Markup, ids, layout and behaviour are unchanged. The
 builder sync check passes, with the new layout-only differences accepted in
 `baseline.json`.
+
+**Rebrand to field techs (done, uncommitted):** wording across the landing page, builders
+and portal no longer assumes leak detection. New accounts get a first-run picker
+(electrical, HVAC, home inspection, pest control, plumbing, pool and spa leak detection,
+or a general report) that creates their starting preset. Accounts that already have
+reports or presets are untouched. The starter checklists are drafts and should be
+reviewed by someone in each trade. The product is named **VisitWrap** (logo text, page
+titles, landing copy and sign-up text). FieldBrief was dropped because another app
+already uses it. On 2026-11-09 VisitWrap had no similar App Store title or web match and
+`visitwrap.com` was available; no trademark search has been done yet. File names such as
+`leak-report-builder-*.html` are unchanged because they are live URLs, and the QA
+harness, folder names and `@leaktrace.test` test accounts keep their old names.
 
 **Not done (needs your call):** the layout fixes in section 2, the customer PDF,
 dark mode, a logo in the portal top bar, and `index.html` (left as is, it already
