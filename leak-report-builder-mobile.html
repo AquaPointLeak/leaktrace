@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeakTrace — Pool Leak Detection Reports</title>
+<title>VisitWrap — Field Report Builder</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <style>
@@ -259,7 +259,7 @@
 <div id="topbar">
   <div class="brand">
     <div class="ripple-mark"><span></span><span></span></div>
-    <div><div class="brand-name">LeakTrace</div><div class="brand-sub">Field Report Builder</div></div>
+    <div><div class="brand-name">VisitWrap</div><div class="brand-sub">Field Report Builder</div></div>
   </div>
   <div id="topbarActions"></div>
 </div>
@@ -549,6 +549,129 @@ const DEFAULT_CATEGORY_TEMPLATE = [
   {title:'Additional Photos', intro:'', items:[]}
 ];
 
+/* ---------------- starter presets (first run) ----------------
+   A brand-new account is asked which kind of work it does and starts from the matching
+   preset. Structure only: headings, field labels and checklist items. Everything here
+   is editable afterwards under Preset Sections. Accounts that already have reports or
+   presets never see this. */
+const NEUTRAL_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the visit. It does not certify code compliance or guarantee future performance.";
+const STARTER_SUMMARY_FIELDS = ['Key findings','Recommended actions','Follow-up needed'];
+const TRADE_STARTERS = [
+  {id:'electrical', label:'Electrical', blurb:'Service panel, circuits, devices and readings.',
+   name:'Electrical Service', reportTitle:'Electrical Service Report',
+   jobFields:['Date Performed','Report Date','Reason For Call','Panel / Circuit','Tech Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Service and Panel', intro:'', items:['Main breaker','Panel cover and labeling','Breaker condition','Grounding and bonding','Signs of overheating']},
+     {title:'Circuits and Devices', intro:'', items:['Outlets','GFCI and AFCI protection','Switches and fixtures','Smoke and CO alarms','Visible wiring']},
+     {title:'Readings', intro:'', items:['Voltage at panel','Voltage at tested outlets','Load on tested circuits']},
+     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]},
+  {id:'hvac', label:'HVAC', blurb:'Outdoor and indoor units, airflow and readings.',
+   name:'HVAC Service', reportTitle:'HVAC Service Report',
+   jobFields:['Date Performed','Report Date','Reason For Call','System Type','Equipment Make / Model','Tech Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Outdoor Unit', intro:'', items:['Condenser coil','Fan motor and blade','Contactor and capacitor','Refrigerant lines','Electrical disconnect','Pad and clearance']},
+     {title:'Indoor Unit', intro:'', items:['Air filter','Evaporator coil','Blower motor and wheel','Condensate drain and pan','Thermostat operation','Ductwork and airflow']},
+     {title:'Readings', intro:'', items:['Supply air temperature','Return air temperature','Temperature split','Refrigerant pressures','Amp draw']},
+     {title:'Additional Findings', intro:'', items:['Repairs recommended','Parts needed','Estimate to follow']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]},
+  {id:'home-inspection', label:'Home inspection', blurb:'Roof to foundation, systems and interior.',
+   name:'Home Inspection', reportTitle:'Home Inspection Report',
+   jobFields:['Date Performed','Report Date','Property Type','Year Built','Square Footage','Inspector Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Roof and Exterior', intro:'', items:['Roof covering','Gutters and downspouts','Siding and trim','Windows and doors','Grading and drainage']},
+     {title:'Structure', intro:'', items:['Foundation','Framing','Attic','Crawlspace or basement']},
+     {title:'Plumbing', intro:'', items:['Supply lines','Drain lines','Water heater','Fixtures']},
+     {title:'Electrical', intro:'', items:['Service panel','Wiring','Outlets and switches','Smoke and CO alarms']},
+     {title:'Heating and Cooling', intro:'', items:['Heating system','Cooling system','Ductwork','Thermostat']},
+     {title:'Additional Findings', intro:'', items:['Repairs recommended','Further evaluation recommended']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]},
+  {id:'pest', label:'Pest control', blurb:'Inspection, treatment performed and follow-up.',
+   name:'Pest Control Service', reportTitle:'Pest Control Service Report',
+   jobFields:['Date Performed','Report Date','Reason For Call','Pest Type','Property Type','Tech Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Exterior Inspection', intro:'', items:['Foundation and slab','Entry points','Moisture and drainage','Vegetation and wood contact','Garage and outbuildings']},
+     {title:'Interior Inspection', intro:'', items:['Kitchen','Bathrooms','Attic','Crawlspace or basement','Windows and doors']},
+     {title:'Treatment Performed', intro:'', items:['Areas treated','Products applied','Bait stations placed','Traps set','Exclusion work']},
+     {title:'Follow-up', intro:'', items:['Re-inspection recommended','Customer prep notes']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]},
+  {id:'plumbing', label:'Plumbing', blurb:'Visual checks, pressure and drain tests, work done.',
+   name:'Plumbing Service', reportTitle:'Plumbing Service Report',
+   jobFields:['Date Performed','Report Date','Reason For Call','Fixture / Area','Tech Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Visual Inspection', intro:'', items:['Water heater','Shut-off valves','Supply lines','Drain lines','Fixtures and faucets','Hose bibs','Signs of moisture or staining']},
+     {title:'Testing', intro:'Readings and tests taken at the locations below.', items:['Static water pressure','Flow at fixtures','Hot water temperature','Pressure regulator','Drain flow','Camera inspection']},
+     {title:'Work Performed', intro:'', items:['Repairs completed','Parts replaced','Fixtures installed']},
+     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]},
+  {id:'pool', label:'Pool and spa leak detection', blurb:'Visual leak inspection, plumbing static tests, bond beam.',
+   name:'Pool and Spa Leak Detection', reportTitle:'Leak Detection Report',
+   jobFields:DEFAULT_JOB_FIELDS.slice(), summaryFields:DEFAULT_SUMMARY_FIELDS.slice(), disclaimer:DEFAULT_DISCLAIMER,
+   sections:DEFAULT_CATEGORY_TEMPLATE},
+  {id:'general', label:'Something else', blurb:'A general service report you can shape to your own work.',
+   name:'General Service Report', reportTitle:'Service Report',
+   jobFields:['Date Performed','Report Date','Reason For Call','Tech Name','Price ($)'],
+   sections:[
+     {title:'Job Site', intro:'', items:[]},
+     {title:'Inspection', intro:'', items:['Area inspected','Equipment checked','Safety concerns']},
+     {title:'Work Performed', intro:'', items:['Work completed','Parts or materials used','Customer walkthrough']},
+     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
+     {title:'Additional Photos', intro:'', items:[]}
+   ]}
+];
+function starterById(id){ return TRADE_STARTERS.find(s=>s.id===id) || TRADE_STARTERS[TRADE_STARTERS.length-1]; }
+function buildStarterTemplate(s){
+  return {id:uid(), name:s.name, isDefault:true, disclaimer:(s.disclaimer || NEUTRAL_DISCLAIMER),
+          jobHeading:'Job Information', jobFields:s.jobFields.slice(),
+          reportTitle:s.reportTitle, customerHeading:DEFAULT_CUSTOMER_HEADING,
+          customerFields:DEFAULT_CUSTOMER_FIELDS.map(f=>({label:f.label, role:f.role})),
+          summaryHeading:DEFAULT_SUMMARY_HEADING, summaryFields:(s.summaryFields || STARTER_SUMMARY_FIELDS).slice(),
+          disclaimerHeading:DEFAULT_DISCLAIMER_HEADING, sections:tplNormalize(s.sections)};
+}
+function closeStarterPicker(){
+  const el = document.getElementById('starterPicker');
+  if(el) el.remove();
+}
+function showStarterPicker(){
+  if(!state.session || !state.starterNeeded || document.getElementById('starterPicker')) return;
+  const div = document.createElement('div');
+  div.id = 'starterPicker';
+  div.className = 'modal-backdrop';
+  div.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="starterTitle">
+      <h3 id="starterTitle">What kind of work do you do?</h3>
+      <p>Pick a starting checklist. You can edit it, or add more, under Preset Sections.</p>
+      ${TRADE_STARTERS.map(s=>`
+        <button class="preset-choice" onclick="chooseStarter('${s.id}')">
+          <b>${esc(s.label)}</b>
+          <span>${esc(s.blurb)}</span>
+        </button>`).join('')}
+    </div>`;
+  document.body.appendChild(div);
+}
+async function chooseStarter(id){
+  const s = starterById(id);
+  const t = buildStarterTemplate(s);
+  state.templates = [t];
+  state.activeTemplateId = t.id;
+  state.starterNeeded = false;
+  closeStarterPicker();
+  const result = await persistTemplates();
+  if(!result.ok) showToast('Could not save your starter: '+result.message);
+  else showToast(s.id==='general' ? 'General report ready' : s.label+' starter ready');
+  render();
+}
+
 /* ---------------- state ---------------- */
 let state = { view:'list', reportsIndex:[], current:null, business:{}, search:'', statusFilter:'All', templates:[], activeTemplateId:null, session:null, authMsg:null, authBusy:false, authMode:'signin', recovering:false, authEmail:'', catalogue:[], catSearch:'', catExpanded:null, catBusy:false, catError:null, isAdmin:false, reviewQueue:[], revFilter:'pending', revBusy:false, revError:null };
 
@@ -579,7 +702,7 @@ function autoGrowTextareas(container){
 }
 
 async function loadEverything(){
-  state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
+  state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:NEUTRAL_DISCLAIMER };
   if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
   state.business.disclaimerDefault = cleanDisclaimer(state.business.disclaimerDefault);
   state.reportsIndex = (await storeGet('reports-index')) || [];
@@ -589,6 +712,7 @@ async function loadEverything(){
     // brand new account: nothing on the letterhead yet
     state.view = 'settings';
   }
+  if(state.starterNeeded) setTimeout(showStarterPicker, 0);
 }
 
 async function init(){
@@ -812,7 +936,7 @@ function renderLogin(){
 
   const copy = {
     signin: { h:'Sign in',            p:'Sign in to build and send inspection reports.' },
-    signup: { h:'Create your account', p:'Set up your company on LeakTrace. Takes about a minute.' },
+    signup: { h:'Create your account', p:'Set up your company on VisitWrap. Takes about a minute.' },
     forgot: { h:'Reset your password', p:"Enter your email and we'll send you a link to set a new password." },
     reset:  { h:'Choose a new password', p:'Pick something you have not used elsewhere.' }
   }[mode];
@@ -1405,7 +1529,7 @@ async function buildPDF(){
   }
 
   doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(fg[0],fg[1],fg[2]);
-  doc.text(biz.companyName || 'Pool Leak Detection Report', textX, bandH/2 - 2);
+  doc.text(biz.companyName || 'Service Report', textX, bandH/2 - 2);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(fgSoft[0],fgSoft[1],fgSoft[2]);
   doc.text([biz.companyPhone, biz.companyEmail].filter(Boolean).join('   |   '), textX, bandH/2 + 13);
   const rno = fmtReportNo(r.reportNumber);
@@ -1556,7 +1680,7 @@ async function buildPDF(){
   doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(140,145,142);
   doc.text('© '+new Date().getFullYear()+' '+(biz.companyName||'')+'   ·   Report generated '+new Date().toLocaleDateString(), margin, pageH-24);
 
-  const filename = ((reportClientName(r)||'report').replace(/[^a-z0-9]+/gi,'_'))+'_leak_report.pdf';
+  const filename = ((reportClientName(r)||'report').replace(/[^a-z0-9]+/gi,'_'))+'_report.pdf';
   return { doc, filename, r };
 }
 
@@ -1580,8 +1704,8 @@ async function emailPDF(){
       try{
         await navigator.share({
           files:[file],
-          title: 'Your Pool Leak Detection Report',
-          text: 'Hi '+(reportClientName(r)||'there')+'! Your leak report is attached. If you have any questions or concerns, please reach out to '+(state.business.companyPhone||'us')+'. Thank you!'
+          title: 'Your '+(r.reportTitle || DEFAULT_REPORT_TITLE),
+          text: 'Hi '+(reportClientName(r)||'there')+'! Your report is attached. If you have any questions or concerns, please reach out to '+(state.business.companyPhone||'us')+'. Thank you!'
         });
       }catch(shareErr){
         if(!shareErr || shareErr.name !== 'AbortError'){
@@ -1592,8 +1716,8 @@ async function emailPDF(){
     } else {
       savePDF(doc, filename);
       const to = encodeURIComponent(reportEmail(r) || '');
-      const subject = encodeURIComponent('Your Leak Detection Report is Ready');
-      const body = encodeURIComponent('Hi '+(reportClientName(r)||'')+'!\n\nYour leak report is ready — please see the attached PDF (attach the file from the previous step).\n\nIf you have any questions or concerns, please reach out to '+(state.business.companyPhone||'')+'.\n\nThank you!');
+      const subject = encodeURIComponent('Your '+(r.reportTitle || DEFAULT_REPORT_TITLE)+' is Ready');
+      const body = encodeURIComponent('Hi '+(reportClientName(r)||'')+'!\n\nYour report is ready — please see the attached PDF (attach the file from the previous step).\n\nIf you have any questions or concerns, please reach out to '+(state.business.companyPhone||'')+'.\n\nThank you!');
       showToast('Opening email — attach the PDF from the previous step');
       setTimeout(()=>{ window.location.href = 'mailto:'+to+'?subject='+subject+'&body='+body; }, 500);
     }
@@ -1616,10 +1740,14 @@ function tplNormalize(sections){
 }
 async function loadTemplates(){
   let saved = await storeGet('category-presets');
+  let fresh = false;
   if(!saved || !saved.length){
     // migrate from the older single-template format, if present
     const legacy = await storeGet('category-template');
-    saved = [{
+    // A brand-new account (no presets, no older template, no reports) starts from the neutral
+    // starter and is asked which trade it works in. Accounts with history keep the pool leak starter.
+    fresh = !(legacy && legacy.length) && !(state.reportsIndex && state.reportsIndex.length);
+    saved = fresh ? [buildStarterTemplate(starterById('general'))] : [{
       id: uid(),
       name: (legacy && legacy.length) ? 'My Preset' : 'Standard Leak Detection',
       isDefault: true,
@@ -1629,6 +1757,7 @@ async function loadTemplates(){
       sections: (legacy && legacy.length) ? legacy : DEFAULT_CATEGORY_TEMPLATE
     }];
   }
+  state.starterNeeded = fresh;
   state.templates = saved.map(t=>({
     id: t.id || uid(),
     name: t.name || 'Untitled preset',
@@ -2446,7 +2575,7 @@ function renderTemplate(){
     <div class="tpl-sections-label">Inspection Sections</div>
     <div id="tplWrap"></div>
     <div class="add-cat-bar">
-      <input id="newTplSection" placeholder="New preset section, e.g. Spa Jet Test" onkeydown="if(event.key==='Enter'){addTplSection(this.value); this.value='';}">
+      <input id="newTplSection" placeholder="New preset section, e.g. Additional Checks" onkeydown="if(event.key==='Enter'){addTplSection(this.value); this.value='';}">
       <button class="btn btn-outline" onclick="const i=document.getElementById('newTplSection'); addTplSection(i.value); i.value='';">+ Add Section</button>
     </div>
     <div class="card">
@@ -2600,7 +2729,7 @@ function renderEditor(){
     <div id="catsWrap"></div>
 
     <div class="add-cat-bar">
-      <input id="newCatInput" placeholder="New section name, e.g. Spa Jet Test" onkeydown="if(event.key==='Enter'){addCategory(this.value); this.value='';}">
+      <input id="newCatInput" placeholder="New section name, e.g. Additional Checks" onkeydown="if(event.key==='Enter'){addCategory(this.value); this.value='';}">
       <button class="btn btn-outline" onclick="const i=document.getElementById('newCatInput'); addCategory(i.value); i.value='';">+ Add Section</button>
       <button class="btn btn-outline" onclick="saveAsTemplate()">Save as preset</button>
     </div>
