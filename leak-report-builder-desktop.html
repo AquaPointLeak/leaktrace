@@ -240,6 +240,24 @@
   .sticky-actions{position:sticky;bottom:0;background:linear-gradient(0deg,var(--paper) 60%,transparent);padding:16px 0 4px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none;}
   .toast.show{opacity:1;}
+
+  /* Phones and small tablets (same 900px cutoff the landing page uses to pick this builder):
+     one column. The report list and the open report/page take turns, like the mobile builder.
+     render() adds .show-list to #shell while no report or page is open. */
+  @media(max-width:899px){
+    #shell{display:block;}
+    #sidebar{display:none;width:auto;position:static;height:auto;min-height:100vh;overflow-y:visible;padding:18px;}
+    #shell.show-list #sidebar{display:flex;}
+    #shell.show-list #mainPanel{display:none;}
+    #mainPanel{max-width:none;padding:20px 18px 90px;}
+    .sidebar-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .sidebar-actions .btn-primary{grid-column:1 / -1;}
+    .sidebar-list{overflow-y:visible;flex:none;}
+    .items-grid,.job-fields-grid{grid-template-columns:1fr;}
+    .editor-header{flex-wrap:wrap;gap:10px;}
+  }
+  @media(max-width:520px){.field-row{flex-direction:column;} table.items-table td{padding:5px 3px;}}
+  @media(max-width:520px){.sticky-actions{background:var(--paper);border-top:1px solid var(--line);margin:0 -18px;padding:10px 18px calc(10px + env(safe-area-inset-bottom));gap:8px;} .sticky-actions .btn{flex:1 1 auto;justify-content:center;padding:10px 12px;}}
 </style>
 </head>
 <body>
@@ -2463,7 +2481,15 @@ function renderTemplate(){
 
 const MAIN_EL = 'mainPanel';
 function render(){
-  if(state.recovering || !state.session){ document.getElementById('sidebar').innerHTML = ''; return renderLogin(); }
+  const shell = document.getElementById('shell');
+  if(state.recovering || !state.session){ shell.classList.remove('show-list'); document.getElementById('sidebar').innerHTML = ''; return renderLogin(); }
+  /* Narrow screens show the report list OR the open report/page, never both (see the max-width:899px CSS).
+     Switching between the two starts at the top of the page. Wide screens ignore the class. */
+  const showList = !['editor','settings','template','catalogue','review'].includes(state.view);
+  if(shell.classList.contains('show-list') !== showList){
+    shell.classList.toggle('show-list', showList);
+    if(window.matchMedia && window.matchMedia('(max-width: 899px)').matches) window.scrollTo(0,0);
+  }
   renderSidebar();
   if(state.view==='editor') renderEditor();
   else if(state.view==='settings') renderSettings();

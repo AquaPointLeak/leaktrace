@@ -1,10 +1,10 @@
 {
   "<markup>": "differs:448aa5917adb",
-  "<style>": "differs:8ab3d57962ba",
+  "<style>": "differs:100b25ba5acf",
   "MAIN_EL": "differs:2183b71e10ec",
   "closeMain": "only-desktop:c74f5cd4dd73",
   "goList": "only-mobile:031c9cb8c432",
-  "render": "differs:8ac5257b33a5",
+  "render": "differs:2a96d6893e36",
   "renderCatalogue": "differs:3a434a5e3407",
   "renderCategories": "differs:62d30a80b2b4",
   "renderEditor": "differs:f1499391165e",
