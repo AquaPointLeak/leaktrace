@@ -583,92 +583,25 @@ const DEFAULT_CATEGORY_TEMPLATE = [
 ];
 
 /* ---------------- starter presets (first run) ----------------
-   A brand-new account is asked which kind of work it does and starts from the matching
-   preset. Structure only: headings, field labels and checklist items. Everything here
-   is editable afterwards under Preset Sections. Accounts that already have reports or
-   presets never see this. */
-const NEUTRAL_DISCLAIMER = "This report reflects only the components and conditions that were visible and accessible at the time of the visit. It does not certify code compliance or guarantee future performance.";
-const STARTER_SUMMARY_FIELDS = ['Key findings','Recommended actions','Follow-up needed'];
+   A brand-new account (no presets, no reports) starts from a starter preset. Right now the
+   only starter is Standard Leak Detection, so no picker is shown and new accounts simply
+   start from it. Add more entries to TRADE_STARTERS and the first-run "What kind of work do
+   you do?" picker comes back automatically. Starters carry structure only (headings, field
+   labels, checklist items) and stay editable under Preset Sections. Accounts that already
+   have reports or presets never see this. */
 const TRADE_STARTERS = [
-  {id:'electrical', label:'Electrical', blurb:'Service panel, circuits, devices and readings.',
-   name:'Electrical Service', reportTitle:'Electrical Service Report',
-   jobFields:['Date Performed','Report Date','Reason For Call','Panel / Circuit','Tech Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Service and Panel', intro:'', items:['Main breaker','Panel cover and labeling','Breaker condition','Grounding and bonding','Signs of overheating']},
-     {title:'Circuits and Devices', intro:'', items:['Outlets','GFCI and AFCI protection','Switches and fixtures','Smoke and CO alarms','Visible wiring']},
-     {title:'Readings', intro:'', items:['Voltage at panel','Voltage at tested outlets','Load on tested circuits']},
-     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]},
-  {id:'hvac', label:'HVAC', blurb:'Outdoor and indoor units, airflow and readings.',
-   name:'HVAC Service', reportTitle:'HVAC Service Report',
-   jobFields:['Date Performed','Report Date','Reason For Call','System Type','Equipment Make / Model','Tech Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Outdoor Unit', intro:'', items:['Condenser coil','Fan motor and blade','Contactor and capacitor','Refrigerant lines','Electrical disconnect','Pad and clearance']},
-     {title:'Indoor Unit', intro:'', items:['Air filter','Evaporator coil','Blower motor and wheel','Condensate drain and pan','Thermostat operation','Ductwork and airflow']},
-     {title:'Readings', intro:'', items:['Supply air temperature','Return air temperature','Temperature split','Refrigerant pressures','Amp draw']},
-     {title:'Additional Findings', intro:'', items:['Repairs recommended','Parts needed','Estimate to follow']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]},
-  {id:'home-inspection', label:'Home inspection', blurb:'Roof to foundation, systems and interior.',
-   name:'Home Inspection', reportTitle:'Home Inspection Report',
-   jobFields:['Date Performed','Report Date','Property Type','Year Built','Square Footage','Inspector Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Roof and Exterior', intro:'', items:['Roof covering','Gutters and downspouts','Siding and trim','Windows and doors','Grading and drainage']},
-     {title:'Structure', intro:'', items:['Foundation','Framing','Attic','Crawlspace or basement']},
-     {title:'Plumbing', intro:'', items:['Supply lines','Drain lines','Water heater','Fixtures']},
-     {title:'Electrical', intro:'', items:['Service panel','Wiring','Outlets and switches','Smoke and CO alarms']},
-     {title:'Heating and Cooling', intro:'', items:['Heating system','Cooling system','Ductwork','Thermostat']},
-     {title:'Additional Findings', intro:'', items:['Repairs recommended','Further evaluation recommended']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]},
-  {id:'pest', label:'Pest control', blurb:'Inspection, treatment performed and follow-up.',
-   name:'Pest Control Service', reportTitle:'Pest Control Service Report',
-   jobFields:['Date Performed','Report Date','Reason For Call','Pest Type','Property Type','Tech Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Exterior Inspection', intro:'', items:['Foundation and slab','Entry points','Moisture and drainage','Vegetation and wood contact','Garage and outbuildings']},
-     {title:'Interior Inspection', intro:'', items:['Kitchen','Bathrooms','Attic','Crawlspace or basement','Windows and doors']},
-     {title:'Treatment Performed', intro:'', items:['Areas treated','Products applied','Bait stations placed','Traps set','Exclusion work']},
-     {title:'Follow-up', intro:'', items:['Re-inspection recommended','Customer prep notes']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]},
-  {id:'plumbing', label:'Plumbing', blurb:'Visual checks, pressure and drain tests, work done.',
-   name:'Plumbing Service', reportTitle:'Plumbing Service Report',
-   jobFields:['Date Performed','Report Date','Reason For Call','Fixture / Area','Tech Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Visual Inspection', intro:'', items:['Water heater','Shut-off valves','Supply lines','Drain lines','Fixtures and faucets','Hose bibs','Signs of moisture or staining']},
-     {title:'Testing', intro:'Readings and tests taken at the locations below.', items:['Static water pressure','Flow at fixtures','Hot water temperature','Pressure regulator','Drain flow','Camera inspection']},
-     {title:'Work Performed', intro:'', items:['Repairs completed','Parts replaced','Fixtures installed']},
-     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]},
   {id:'pool', label:'Pool and spa leak detection', blurb:'Visual leak inspection, plumbing static tests, bond beam.',
-   name:'Pool and Spa Leak Detection', reportTitle:'Leak Detection Report',
+   name:'Standard Leak Detection', reportTitle:DEFAULT_REPORT_TITLE,
    jobFields:DEFAULT_JOB_FIELDS.slice(), summaryFields:DEFAULT_SUMMARY_FIELDS.slice(), disclaimer:DEFAULT_DISCLAIMER,
-   sections:DEFAULT_CATEGORY_TEMPLATE},
-  {id:'general', label:'Something else', blurb:'A general service report you can shape to your own work.',
-   name:'General Service Report', reportTitle:'Service Report',
-   jobFields:['Date Performed','Report Date','Reason For Call','Tech Name','Price ($)'],
-   sections:[
-     {title:'Job Site', intro:'', items:[]},
-     {title:'Inspection', intro:'', items:['Area inspected','Equipment checked','Safety concerns']},
-     {title:'Work Performed', intro:'', items:['Work completed','Parts or materials used','Customer walkthrough']},
-     {title:'Additional Findings', intro:'', items:['Repairs recommended','Estimate to follow']},
-     {title:'Additional Photos', intro:'', items:[]}
-   ]}
+   sections:DEFAULT_CATEGORY_TEMPLATE}
 ];
 function starterById(id){ return TRADE_STARTERS.find(s=>s.id===id) || TRADE_STARTERS[TRADE_STARTERS.length-1]; }
 function buildStarterTemplate(s){
-  return {id:uid(), name:s.name, isDefault:true, disclaimer:(s.disclaimer || NEUTRAL_DISCLAIMER),
+  return {id:uid(), name:s.name, isDefault:true, disclaimer:(s.disclaimer || DEFAULT_DISCLAIMER),
           jobHeading:'Job Information', jobFields:s.jobFields.slice(),
           reportTitle:s.reportTitle, customerHeading:DEFAULT_CUSTOMER_HEADING,
           customerFields:DEFAULT_CUSTOMER_FIELDS.map(f=>({label:f.label, role:f.role})),
-          summaryHeading:DEFAULT_SUMMARY_HEADING, summaryFields:(s.summaryFields || STARTER_SUMMARY_FIELDS).slice(),
+          summaryHeading:DEFAULT_SUMMARY_HEADING, summaryFields:(s.summaryFields || DEFAULT_SUMMARY_FIELDS).slice(),
           disclaimerHeading:DEFAULT_DISCLAIMER_HEADING, sections:tplNormalize(s.sections)};
 }
 function closeStarterPicker(){
@@ -735,7 +668,7 @@ function autoGrowTextareas(container){
 }
 
 async function loadEverything(){
-  state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:NEUTRAL_DISCLAIMER };
+  state.business = (await storeGet('business-profile')) || { companyName:'', companyPhone:'', companyEmail:'', logoDataUrl:'', headerColor:'#0B2947', disclaimerDefault:DEFAULT_DISCLAIMER };
   if(!state.business.disclaimerDefault) state.business.disclaimerDefault = DEFAULT_DISCLAIMER;
   state.business.disclaimerDefault = cleanDisclaimer(state.business.disclaimerDefault);
   state.reportsIndex = (await storeGet('reports-index')) || [];
@@ -1781,7 +1714,7 @@ async function loadTemplates(){
     // A brand-new account (no presets, no older template, no reports) starts from the neutral
     // starter and is asked which trade it works in. Accounts with history keep the pool leak starter.
     fresh = !(legacy && legacy.length) && !(state.reportsIndex && state.reportsIndex.length);
-    saved = fresh ? [buildStarterTemplate(starterById('general'))] : [{
+    saved = fresh ? [buildStarterTemplate(starterById('pool'))] : [{
       id: uid(),
       name: (legacy && legacy.length) ? 'My Preset' : 'Standard Leak Detection',
       isDefault: true,
@@ -1791,7 +1724,7 @@ async function loadTemplates(){
       sections: (legacy && legacy.length) ? legacy : DEFAULT_CATEGORY_TEMPLATE
     }];
   }
-  state.starterNeeded = fresh;
+  state.starterNeeded = fresh && TRADE_STARTERS.length > 1;
   state.templates = saved.map(t=>({
     id: t.id || uid(),
     name: t.name || 'Untitled preset',

@@ -20,11 +20,14 @@ builder sync check passes, with the new layout-only differences accepted in
 `baseline.json`.
 
 **Rebrand to field techs (done, uncommitted):** wording across the landing page, builders
-and portal no longer assumes leak detection. New accounts get a first-run picker
-(electrical, HVAC, home inspection, pest control, plumbing, pool and spa leak detection,
-or a general report) that creates their starting preset. Accounts that already have
-reports or presets are untouched. The starter checklists are drafts and should be
-reviewed by someone in each trade. The product is named **VisitWrap** (logo text, page
+and portal no longer assumes leak detection. For now the only starting preset is
+**Standard Leak Detection**: new accounts start from it and no picker is shown. A
+first-run "What kind of work do you do?" picker is still in the code and returns
+automatically once more entries are added to `TRADE_STARTERS`. Drafts for electrical,
+HVAC, home inspection, pest control, plumbing and a general report were written but
+removed; they are in commit `ccf09e8` and should be reviewed by someone in each trade
+before they come back. Accounts that already have reports or presets are untouched.
+The product is named **VisitWrap** (logo text, page
 titles, landing copy and sign-up text). FieldBrief was dropped because another app
 already uses it. On 2026-11-09 VisitWrap had no similar App Store title or web match and
 `visitwrap.com` was available; no trademark search has been done yet. File names such as
